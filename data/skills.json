@@ -1,0 +1,132 @@
+{
+  "categories": [
+    {
+      "name": "Programming Languages",
+      "skills": [
+        {"name": "Python", "aliases": ["Python 3"]},
+        {"name": "Java", "aliases": []},
+        {"name": "C", "aliases": ["C programming", "C language", "programming in C", "C developer"]},
+        {"name": "JavaScript", "aliases": ["JS", "ECMAScript"]},
+        {"name": "TypeScript", "aliases": ["TS"]},
+        {"name": "C++", "aliases": ["cpp"]},
+        {"name": "C#", "aliases": ["C sharp"]},
+        {"name": "Go", "aliases": ["Golang"]},
+        {"name": "Rust", "aliases": []},
+        {"name": "Kotlin", "aliases": []},
+        {"name": "Swift", "aliases": []},
+        {"name": "PHP", "aliases": []},
+        {"name": "Ruby", "aliases": []},
+        {"name": "Scala", "aliases": []},
+        {"name": "Bash", "aliases": ["Shell scripting"]}
+      ]
+    },
+    {
+      "name": "AI and Machine Learning",
+      "skills": [
+        {"name": "Artificial Intelligence", "aliases": ["AI"]},
+        {"name": "Machine Learning", "aliases": ["ML"]},
+        {"name": "Deep Learning", "aliases": []},
+        {"name": "Natural Language Processing", "aliases": ["NLP"]},
+        {"name": "Generative AI", "aliases": ["GenAI", "Generative Artificial Intelligence"]},
+        {"name": "Large Language Models", "aliases": ["LLM", "LLMs"]},
+        {"name": "Neural Networks", "aliases": ["Neural Network"]},
+        {"name": "Reinforcement Learning", "aliases": []},
+        {"name": "Computer Vision", "aliases": []},
+        {"name": "TensorFlow", "aliases": []},
+        {"name": "PyTorch", "aliases": []},
+        {"name": "scikit-learn", "aliases": ["sklearn", "scikit learn"]}
+      ]
+    },
+    {
+      "name": "Data Science",
+      "skills": [
+        {"name": "Data Science", "aliases": []},
+        {"name": "Data Analysis", "aliases": ["Data Analytics"]},
+        {"name": "Statistical Analysis", "aliases": ["Statistics"]},
+        {"name": "Data Visualization", "aliases": []},
+        {"name": "ETL", "aliases": ["Extract Transform Load"]},
+        {"name": "A/B Testing", "aliases": ["AB Testing", "Split Testing"]},
+        {"name": "Feature Engineering", "aliases": []},
+        {"name": "Time Series Analysis", "aliases": []}
+      ]
+    },
+    {
+      "name": "Databases",
+      "skills": [
+        {"name": "SQL", "aliases": []},
+        {"name": "PostgreSQL", "aliases": ["Postgres"]},
+        {"name": "MySQL", "aliases": []},
+        {"name": "SQLite", "aliases": []},
+        {"name": "MongoDB", "aliases": ["Mongo"]},
+        {"name": "Redis", "aliases": []},
+        {"name": "Microsoft SQL Server", "aliases": ["SQL Server", "MSSQL"]},
+        {"name": "Oracle Database", "aliases": ["Oracle DB"]},
+        {"name": "NoSQL", "aliases": ["No SQL"]}
+      ]
+    },
+    {
+      "name": "Web Development",
+      "skills": [
+        {"name": "HTML", "aliases": ["HTML5"]},
+        {"name": "CSS", "aliases": ["CSS3"]},
+        {"name": "REST API", "aliases": ["REST APIs", "RESTful API", "RESTful APIs"]},
+        {"name": "GraphQL", "aliases": []},
+        {"name": "Frontend Development", "aliases": ["Front-end Development", "Frontend"]},
+        {"name": "Backend Development", "aliases": ["Back-end Development", "Backend"]},
+        {"name": "Responsive Web Design", "aliases": ["Responsive Design"]}
+      ]
+    },
+    {
+      "name": "Frameworks and Libraries",
+      "skills": [
+        {"name": "React", "aliases": ["React.js", "ReactJS"]},
+        {"name": "Angular", "aliases": ["Angular.js", "AngularJS"]},
+        {"name": "Vue.js", "aliases": ["Vue", "VueJS"]},
+        {"name": "Node.js", "aliases": ["NodeJS"]},
+        {"name": "Express.js", "aliases": ["Express", "ExpressJS"]},
+        {"name": "Django", "aliases": []},
+        {"name": "Flask", "aliases": []},
+        {"name": "FastAPI", "aliases": ["Fast API"]},
+        {"name": "Spring Boot", "aliases": ["Spring"]},
+        {"name": ".NET", "aliases": ["dotnet"]},
+        {"name": "Pandas", "aliases": []},
+        {"name": "NumPy", "aliases": ["Numerical Python"]},
+        {"name": "SciPy", "aliases": []}
+      ]
+    },
+    {
+      "name": "Developer Tools",
+      "skills": [
+        {"name": "Git", "aliases": []},
+        {"name": "GitHub", "aliases": []},
+        {"name": "Docker", "aliases": []},
+        {"name": "Kubernetes", "aliases": ["K8s"]},
+        {"name": "Linux", "aliases": []},
+        {"name": "CI/CD", "aliases": ["Continuous Integration", "Continuous Delivery"]},
+        {"name": "Jenkins", "aliases": []},
+        {"name": "AWS", "aliases": ["Amazon Web Services"]},
+        {"name": "Microsoft Azure", "aliases": ["Azure"]},
+        {"name": "Google Cloud Platform", "aliases": ["GCP", "Google Cloud"]},
+        {"name": "Jira", "aliases": []},
+        {"name": "Visual Studio Code", "aliases": ["VS Code", "VSCode"]}
+      ]
+    },
+    {
+      "name": "Soft Skills",
+      "skills": [
+        {"name": "Communication", "aliases": ["Verbal Communication"]},
+        {"name": "Written Communication", "aliases": []},
+        {"name": "Leadership", "aliases": []},
+        {"name": "Teamwork", "aliases": ["Team Work"]},
+        {"name": "Collaboration", "aliases": []},
+        {"name": "Problem Solving", "aliases": ["Problem-solving"]},
+        {"name": "Critical Thinking", "aliases": []},
+        {"name": "Adaptability", "aliases": ["Flexibility"]},
+        {"name": "Time Management", "aliases": []},
+        {"name": "Project Management", "aliases": []},
+        {"name": "Stakeholder Management", "aliases": []},
+        {"name": "Mentoring", "aliases": ["Coaching"]}
+      ]
+    }
+  ]
+}
