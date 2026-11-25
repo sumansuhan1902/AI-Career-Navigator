@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 from modules.resume_parser import (
@@ -156,17 +158,17 @@ def apply_styles() -> None:
 
 def render_heading(eyebrow: str, title: str, subtitle: str) -> None:
     st.markdown(
-        f'<div class="eyebrow">{eyebrow}</div>'
-        f'<div class="page-heading">{title}</div>'
-        f'<p class="page-subtitle">{subtitle}</p>',
+        f'<div class="eyebrow">{html.escape(eyebrow)}</div>'
+        f'<div class="page-heading">{html.escape(title)}</div>'
+        f'<p class="page-subtitle">{html.escape(subtitle)}</p>',
         unsafe_allow_html=True,
     )
 
 
 def render_metric(label: str, value: str) -> None:
     st.markdown(
-        f'<div class="metric-card"><div class="metric-label">{label}</div>'
-        f'<div class="metric-value">{value}</div></div>',
+        f'<div class="metric-card"><div class="metric-label">{html.escape(label)}</div>'
+        f'<div class="metric-value">{html.escape(value)}</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -481,7 +483,7 @@ def render_pending_page(title: str, subtitle: str, details: str) -> None:
     render_heading("Coming later", title, subtitle)
     st.markdown(
         f'<div class="status-panel" role="status">'
-        f'<strong>Not implemented</strong><span>{details}</span></div>',
+        f'<strong>Not implemented</strong><span>{html.escape(details)}</span></div>',
         unsafe_allow_html=True,
     )
 

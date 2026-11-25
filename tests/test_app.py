@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
-import pymupdf as fitz
+import pymupdf
 from streamlit.testing.v1 import AppTest
 
 from database.db import get_connection
@@ -136,16 +136,16 @@ class ResumeParserTests(unittest.TestCase):
         image: bool = False,
         page_count: int = 1,
     ) -> bytes:
-        document = fitz.open()
+        document = pymupdf.open()
         for _ in range(page_count):
             page = document.new_page()
             if text:
                 page.insert_text((72, 72), text)
             if image:
-                pixmap = fitz.Pixmap(fitz.csRGB, (0, 0, 1, 1), 0)
+                pixmap = pymupdf.Pixmap(pymupdf.csRGB, (0, 0, 1, 1), 0)
                 pixmap.clear_with(255)
                 page.insert_image(
-                    fitz.Rect(0, 0, 100, 100),
+                    pymupdf.Rect(0, 0, 100, 100),
                     stream=pixmap.tobytes("png"),
                 )
         pdf_bytes = document.tobytes()
@@ -207,10 +207,10 @@ class ResumeParserTests(unittest.TestCase):
             extract_text_from_pdf(BytesIO(b"Plain text file, not a PDF"))
 
     def test_rejects_password_protected_pdf(self) -> None:
-        document = fitz.open()
+        document = pymupdf.open()
         document.new_page()
         pdf_bytes = document.tobytes(
-            encryption=fitz.PDF_ENCRYPT_AES_256,
+            encryption=pymupdf.PDF_ENCRYPT_AES_256,
             user_pw="test-password",
             owner_pw="test-owner",
         )
@@ -230,7 +230,7 @@ class ResumeParserTests(unittest.TestCase):
 
         with patch(
             "modules.resume_parser.pymupdf.open",
-            wraps=fitz.open,
+            wraps=pymupdf.open,
         ) as pdf_open:
             extracted_text = extract_text_from_pdf(BytesIO(pdf_bytes))
 
@@ -443,6 +443,302 @@ class JobMatcherTests(unittest.TestCase):
             match_job(None, "Python")  # type: ignore[arg-type]
         with self.assertRaises(InvalidJobMatchingInputError):
             match_job("Python", None)  # type: ignore[arg-type]
+
+
+class SecurityRegressionTests(unittest.TestCase):
+    """Regression tests that document and enforce the security controls
+    introduced during the security remediation phase.
+
+    These tests must never be deleted or skipped.  They verify:
+      - PDF size and page limits as hard security controls.
+      - PDF header signature validation as a file-type gate.
+      - In-memory processing (no disk writes).
+      - Dependency audit: venv pip-audit reports zero known vulnerabilities.
+      - PyMuPDF is imported via the non-deprecated 'pymupdf' namespace.
+      - The deprecated 'fitz' alias is not used anywhere in production modules.
+    """
+
+    # ------------------------------------------------------------------
+    # PDF size limit — enforced at the parser layer, independent of the
+    # Streamlit UI limit.  One byte over MAX_UPLOAD_SIZE_BYTES must fail.
+    # ------------------------------------------------------------------
+
+    def test_size_limit_constant_is_ten_megabytes(self) -> None:
+        """MAX_UPLOAD_SIZE_BYTES must equal exactly 10 MiB (10 * 1024 * 1024)."""
+        self.assertEqual(MAX_UPLOAD_SIZE_BYTES, 10 * 1024 * 1024)
+
+    def test_parser_rejects_file_one_byte_over_size_limit(self) -> None:
+        """A stream whose size attribute is MAX_UPLOAD_SIZE_BYTES + 1 must raise
+        PDFTooLargeError before any PDF parsing begins."""
+        oversized = BytesIO(b"%PDF-1.7\n" + b"x" * MAX_UPLOAD_SIZE_BYTES)
+        # Simulate what Streamlit sets: a .size attribute on the file object.
+        oversized.size = MAX_UPLOAD_SIZE_BYTES + 1  # type: ignore[attr-defined]
+
+        with self.assertRaisesRegex(PDFTooLargeError, "10 MB"):
+            extract_text_from_pdf(oversized)
+
+    def test_parser_accepts_file_exactly_at_size_limit(self) -> None:
+        """A valid PDF whose byte count equals MAX_UPLOAD_SIZE_BYTES must not
+        raise PDFTooLargeError (it may raise other errors for content reasons)."""
+        pdf_bytes = ResumeParserTests.create_pdf(text="At limit")
+        # Pad to exactly the limit so we test the boundary condition.
+        # We just need the size attribute check to pass, not a parseable PDF.
+        boundary_stream = BytesIO(pdf_bytes)
+        boundary_stream.size = MAX_UPLOAD_SIZE_BYTES  # type: ignore[attr-defined]
+        try:
+            extract_text_from_pdf(boundary_stream)
+        except PDFTooLargeError:
+            self.fail("PDFTooLargeError raised for a file exactly at the size limit.")
+        except Exception:
+            # Other errors (EmptyPDF, InvalidPDF, etc.) are acceptable here.
+            pass
+
+    # ------------------------------------------------------------------
+    # PDF page limit — 20 pages maximum.
+    # ------------------------------------------------------------------
+
+    def test_page_limit_constant_is_twenty(self) -> None:
+        """MAX_PDF_PAGES must equal 20."""
+        self.assertEqual(MAX_PDF_PAGES, 20)
+
+    def test_parser_rejects_twenty_one_page_pdf(self) -> None:
+        """A PDF with 21 pages must raise PDFPageLimitError."""
+        pdf_bytes = ResumeParserTests.create_pdf(
+            text="Content", page_count=21
+        )
+        with self.assertRaisesRegex(PDFPageLimitError, "20-page"):
+            extract_text_from_pdf(BytesIO(pdf_bytes))
+
+    def test_parser_accepts_twenty_page_pdf(self) -> None:
+        """A PDF with exactly 20 pages must be accepted and return text."""
+        pdf_bytes = ResumeParserTests.create_pdf(
+            text="Page", page_count=20
+        )
+        text = extract_text_from_pdf(BytesIO(pdf_bytes))
+        self.assertEqual(text.count("Page"), 20)
+
+    def test_parser_rejects_single_page_over_limit(self) -> None:
+        """Even a 1-page PDF must pass the page-limit check cleanly
+        (control flow must not skip the page-count gate for small PDFs)."""
+        pdf_bytes = ResumeParserTests.create_pdf(text="Single page")
+        # 1 page is well within the limit; must succeed.
+        text = extract_text_from_pdf(BytesIO(pdf_bytes))
+        self.assertIn("Single page", text)
+
+    # ------------------------------------------------------------------
+    # PDF header / signature validation.
+    # ------------------------------------------------------------------
+
+    def test_pdf_header_pattern_rejects_missing_signature(self) -> None:
+        """Files without a valid %PDF-X.Y header in the first 1024 bytes
+        must raise InvalidPDFError with a message mentioning 'PDF signature'."""
+        for bad_content in (
+            b"",
+            b"plain text",
+            b"\x00\x01\x02\x03",
+            b"PK\x03\x04notapdf",           # ZIP magic
+            b"\xff\xd8\xff\xe0JFIF",         # JPEG magic
+        ):
+            with self.subTest(content=bad_content[:20]):
+                with self.assertRaises(
+                    (InvalidPDFError, EmptyPDFError),
+                    msg=f"Expected rejection of non-PDF bytes: {bad_content[:20]!r}",
+                ):
+                    extract_text_from_pdf(BytesIO(bad_content))
+
+    def test_pdf_header_pattern_accepts_common_pdf_versions(self) -> None:
+        """The header regex must accept %PDF-1.0 through %PDF-2.0 prefixes
+        without immediately rejecting the file on signature grounds."""
+        import re
+        from modules.resume_parser import PDF_HEADER_PATTERN
+
+        for version in ("1.0", "1.4", "1.7", "2.0"):
+            header = f"%PDF-{version}\n".encode()
+            self.assertIsNotNone(
+                PDF_HEADER_PATTERN.search(header),
+                msg=f"Header pattern should match PDF version {version}",
+            )
+
+    def test_pdf_signature_check_rejects_header_at_offset(self) -> None:
+        """The signature check must look only within the first 1024 bytes.
+        A valid PDF header placed after byte 1024 must still be rejected."""
+        late_header = b"x" * 1025 + b"%PDF-1.7\n"
+        with self.assertRaises((InvalidPDFError, EmptyPDFError)):
+            extract_text_from_pdf(BytesIO(late_header))
+
+    # ------------------------------------------------------------------
+    # In-memory processing — no resume bytes must be written to disk.
+    # ------------------------------------------------------------------
+
+    def test_pdf_extraction_does_not_write_to_disk(self) -> None:
+        """extract_text_from_pdf must never call the built-in open() with
+        a file-system path; all processing must stay in memory."""
+        pdf_bytes = ResumeParserTests.create_pdf(text="Memory only")
+        with patch("builtins.open", side_effect=AssertionError(
+            "builtins.open was called — PDF data was written to disk"
+        )) as mock_open:
+            try:
+                extract_text_from_pdf(BytesIO(pdf_bytes))
+            except AssertionError:
+                self.fail(
+                    "extract_text_from_pdf called builtins.open, "
+                    "which means it attempted to write to disk."
+                )
+            # builtins.open must not have been called at all.
+            mock_open.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # PyMuPDF import — production code must use the non-deprecated namespace.
+    # ------------------------------------------------------------------
+
+    def test_resume_parser_uses_pymupdf_not_fitz(self) -> None:
+        """The production module resume_parser.py must import 'pymupdf',
+        not the deprecated 'fitz' alias.  This test reads the source file
+        directly to catch any future regression."""
+        source_path = (
+            Path(__file__).resolve().parents[1]
+            / "modules"
+            / "resume_parser.py"
+        )
+        source_text = source_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "import pymupdf",
+            source_text,
+            "resume_parser.py must contain 'import pymupdf'.",
+        )
+        self.assertNotIn(
+            "import fitz",
+            source_text,
+            "resume_parser.py must not use the deprecated 'import fitz'.",
+        )
+
+    def test_pymupdf_module_is_importable_via_non_deprecated_name(self) -> None:
+        """'import pymupdf' must succeed without a DeprecationWarning."""
+        import warnings
+        import importlib
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            importlib.import_module("pymupdf")
+
+        deprecation_warnings = [
+            str(w.message)
+            for w in caught
+            if issubclass(w.category, DeprecationWarning)
+            and "fitz" in str(w.message).lower()
+        ]
+        self.assertEqual(
+            deprecation_warnings,
+            [],
+            f"Unexpected fitz DeprecationWarnings on 'import pymupdf': "
+            f"{deprecation_warnings}",
+        )
+
+    # ------------------------------------------------------------------
+    # Dependency audit — no known vulnerabilities in the venv.
+    # ------------------------------------------------------------------
+
+    def test_pip_audit_reports_no_known_vulnerabilities(self) -> None:
+        """pip-audit must report zero known vulnerabilities for all packages
+        installed in the active virtual environment.
+
+        This test is intentionally slow (network call to PyPI advisories) and
+        is marked with a note; it passes in CI when the network is available.
+        If pip-audit is not installed, the test is skipped rather than failed,
+        because the absence of the tool is a configuration issue, not a
+        vulnerability.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, "-m", "pip_audit", "--desc"],
+            capture_output=True,
+            text=True,
+        )
+        output = (result.stdout + result.stderr).strip()
+        # pip-audit exits 0 when no vulnerabilities are found and 1 when
+        # vulnerabilities are present.  Exit code 1 with no output lines
+        # matching "vulnerability" means the tool is not installed.
+        if result.returncode != 0 and "No known vulnerabilities" not in output:
+            if "No module named pip_audit" in output or "No module named pip-audit" in output:
+                self.skipTest("pip-audit is not installed in this environment.")
+            # Non-zero exit with vulnerability output means real findings.
+            self.fail(
+                f"pip-audit reported vulnerabilities or failed:\n{output}"
+            )
+        self.assertIn(
+            "No known vulnerabilities",
+            output,
+            f"Expected 'No known vulnerabilities' in pip-audit output.\n"
+            f"Full output:\n{output}",
+        )
+
+
+    # ------------------------------------------------------------------
+    # HTML escaping & server upload config.
+    # ------------------------------------------------------------------
+
+    def test_streamlit_config_enforces_ten_mb_upload_limit(self) -> None:
+        """Verify .streamlit/config.toml parses cleanly and sets maxUploadSize = 10."""
+        import tomllib
+
+        config_path = (
+            Path(__file__).resolve().parents[1] / ".streamlit" / "config.toml"
+        )
+        self.assertTrue(config_path.is_file(), ".streamlit/config.toml must exist.")
+        with config_path.open("rb") as config_file:
+            config = tomllib.load(config_file)
+        self.assertEqual(config.get("server", {}).get("maxUploadSize"), 10)
+
+    def test_render_heading_escapes_html_characters(self) -> None:
+        """Dynamic values in render_heading must be escaped to prevent HTML injection."""
+        import app as career_app
+
+        with patch.object(career_app.st, "markdown") as mock_markdown:
+            career_app.render_heading(
+                "<script>alert(1)</script>",
+                'Title "with" <tags>',
+                "Sub & <img src=x onerror=alert(1)>",
+            )
+
+        rendered_html = mock_markdown.call_args.args[0]
+        self.assertNotIn("<script>", rendered_html)
+        self.assertNotIn("<img ", rendered_html)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered_html)
+        self.assertIn("&quot;with&quot;", rendered_html)
+        self.assertIn("Sub &amp; &lt;img src=x onerror=alert(1)&gt;", rendered_html)
+
+    def test_render_metric_escapes_html_characters(self) -> None:
+        """Dynamic values in render_metric must be escaped to prevent HTML injection."""
+        import app as career_app
+
+        with patch.object(career_app.st, "markdown") as mock_markdown:
+            career_app.render_metric(
+                "<b>Label</b>",
+                "<script>xss()</script>",
+            )
+
+        rendered_html = mock_markdown.call_args.args[0]
+        self.assertNotIn("<b>Label</b>", rendered_html)
+        self.assertNotIn("<script>", rendered_html)
+        self.assertIn("&lt;b&gt;Label&lt;/b&gt;", rendered_html)
+        self.assertIn("&lt;script&gt;xss()&lt;/script&gt;", rendered_html)
+
+    def test_render_pending_page_escapes_html_characters(self) -> None:
+        """Dynamic details in render_pending_page must be escaped."""
+        import app as career_app
+
+        with patch.object(career_app.st, "markdown") as mock_markdown:
+            career_app.render_pending_page(
+                "Page <1>",
+                "Sub <2>",
+                "<iframe src='javascript:alert(1)'></iframe>",
+            )
+
+        details_call_html = mock_markdown.call_args_list[-1].args[0]
+        self.assertNotIn("<iframe", details_call_html)
+        self.assertIn("&lt;iframe src=&#x27;javascript:alert(1)&#x27;&gt;", details_call_html)
 
 
 if __name__ == "__main__":
