@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path
@@ -27,6 +29,12 @@ from modules.job_matcher import (
     SKILL_COVERAGE_WEIGHT,
     TEXT_SIMILARITY_WEIGHT,
     match_job,
+)
+from modules.learning_roadmap import (
+    InvalidRoadmapInputError,
+    LearningCatalogError,
+    generate_learning_roadmap,
+    load_learning_catalog,
 )
 from modules.resume_parser import (
     EmptyPDFError,
@@ -138,6 +146,275 @@ class DashboardWorkflowTests(unittest.TestCase):
         self.run_app(app)
         self.assertTrue(
             any("resume is missing" in item.value.lower() for item in app.warning)
+        )
+
+
+class DashboardLearningRoadmapTests(unittest.TestCase):
+    @staticmethod
+    def run_app(app: AppTest) -> None:
+        app.run(timeout=20)
+        if app.exception:
+            raise AssertionError([error.message for error in app.exception])
+
+    @staticmethod
+    def app_path() -> Path:
+        return Path(__file__).resolve().parents[1] / "app.py"
+
+    @staticmethod
+    def open_roadmap(app: AppTest) -> None:
+        app.radio[0].set_value("Learning Roadmap")
+        DashboardLearningRoadmapTests.run_app(app)
+
+    def test_navigation_and_no_resume_show_full_selectable_roadmap(self) -> None:
+        app = AppTest.from_file(str(self.app_path()))
+        self.run_app(app)
+        self.assertIn("Learning Roadmap", app.radio[0].options)
+
+        self.open_roadmap(app)
+
+        self.assertTrue(
+            any("upload a resume" in item.value.lower() for item in app.info)
+        )
+        self.assertEqual(
+            app.selectbox(key="learning_roadmap_career_selector").options,
+            [
+                "AI/ML Engineer",
+                "Python Developer",
+                "Data Analyst",
+                "Data Scientist",
+                "NLP Engineer",
+                "Software Developer",
+            ],
+        )
+        self.assertEqual(len(app.checkbox), 12)
+        self.assertTrue(any(item.value == "Beginner" for item in app.subheader))
+        self.assertTrue(any(item.value == "Intermediate" for item in app.subheader))
+        self.assertTrue(any(item.value == "Advanced" for item in app.subheader))
+        self.assertTrue(any("0 of 12 skills complete" in item.value for item in app.caption))
+        self.assertTrue(
+            any("**Completed skills:** None" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("**Remaining skills:**" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("Mini-project:" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("Completion milestone:" in item.value for item in app.markdown)
+        )
+
+    def test_resume_selects_top_recommendation_and_excludes_known_skills(self) -> None:
+        app = AppTest.from_file(str(self.app_path()))
+        app.session_state["resume_text"] = (
+            "Python SQL REST API Git Django Flask"
+        )
+        self.run_app(app)
+        self.open_roadmap(app)
+
+        self.assertEqual(
+            app.selectbox(key="learning_roadmap_career_selector").value,
+            "Python Developer",
+        )
+        checkbox_labels = [checkbox.label for checkbox in app.checkbox]
+        self.assertFalse(any(label.startswith("Python (") for label in checkbox_labels))
+        self.assertFalse(any(label.startswith("SQL (") for label in checkbox_labels))
+        self.assertTrue(
+            any("Detected resume skills" in item.value for item in app.caption)
+        )
+
+    def test_completion_checkbox_updates_progress(self) -> None:
+        app = AppTest.from_file(str(self.app_path()))
+        self.run_app(app)
+        self.open_roadmap(app)
+
+        app.checkbox(key="learning_roadmap_done_AI/ML Engineer_Python").check().run()
+
+        progress = app.session_state["learning_roadmap_progress_by_career"]
+        self.assertEqual(progress["AI/ML Engineer"], ("Python",))
+        self.assertTrue(
+            any("1 of 12 skills complete" in item.value for item in app.caption)
+        )
+        self.assertTrue(
+            any("8.3%" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("**Completed skills:** Python" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("**Remaining skills:**" in item.value for item in app.markdown)
+        )
+
+    def test_career_switching_and_page_navigation_preserve_separate_progress(self) -> None:
+        app = AppTest.from_file(str(self.app_path()))
+        self.run_app(app)
+        self.open_roadmap(app)
+        app.checkbox(key="learning_roadmap_done_AI/ML Engineer_Python").check().run()
+
+        app.selectbox(key="learning_roadmap_career_selector").select(
+            "Python Developer"
+        ).run()
+        self.assertFalse(
+            app.checkbox(key="learning_roadmap_done_Python Developer_Python").value
+        )
+        app.checkbox(key="learning_roadmap_done_Python Developer_Python").check().run()
+
+        progress = app.session_state["learning_roadmap_progress_by_career"]
+        self.assertEqual(progress["AI/ML Engineer"], ("Python",))
+        self.assertEqual(progress["Python Developer"], ("Python",))
+
+        app.selectbox(key="learning_roadmap_career_selector").select(
+            "AI/ML Engineer"
+        ).run()
+        self.assertTrue(
+            app.checkbox(key="learning_roadmap_done_AI/ML Engineer_Python").value
+        )
+        app.radio[0].set_value("Home").run()
+        app.radio[0].set_value("Learning Roadmap").run()
+        self.assertTrue(
+            app.checkbox(key="learning_roadmap_done_AI/ML Engineer_Python").value
+        )
+
+    def test_duplicate_and_out_of_career_progress_is_not_counted(self) -> None:
+        app = AppTest.from_file(str(self.app_path()))
+        app.session_state["learning_roadmap_progress_by_career"] = {
+            "AI/ML Engineer": ["Python", "Python", "Django"],
+            "Python Developer": ["Django", "Django"],
+        }
+        self.run_app(app)
+        self.open_roadmap(app)
+
+        progress = app.session_state["learning_roadmap_progress_by_career"]
+        self.assertEqual(progress["AI/ML Engineer"], ("Python",))
+        self.assertEqual(progress["Python Developer"], ["Django", "Django"])
+        self.assertTrue(
+            any("1 of 12 skills complete" in item.value for item in app.caption)
+        )
+        self.assertTrue(
+            any("**Completed skills:** Python" in item.value for item in app.markdown)
+        )
+
+    def test_reset_requires_confirmation_and_only_resets_selected_career(self) -> None:
+        app = AppTest.from_file(str(self.app_path()))
+        app.session_state["learning_roadmap_progress_by_career"] = {
+            "AI/ML Engineer": ("Python", "Git"),
+            "Python Developer": ("Django",),
+        }
+        self.run_app(app)
+        self.open_roadmap(app)
+
+        app.button(key="learning_roadmap_reset_AI/ML Engineer").click().run()
+        self.assertTrue(
+            any("cannot be undone" in item.value for item in app.warning)
+        )
+        app.button(key="learning_roadmap_cancel_reset_AI/ML Engineer").click().run()
+        self.assertEqual(
+            app.session_state["learning_roadmap_progress_by_career"][
+                "AI/ML Engineer"
+            ],
+            ("Git", "Python"),
+        )
+
+        app.button(key="learning_roadmap_reset_AI/ML Engineer").click().run()
+        app.button(key="learning_roadmap_confirm_reset_AI/ML Engineer").click().run()
+
+        progress = app.session_state["learning_roadmap_progress_by_career"]
+        self.assertNotIn("AI/ML Engineer", progress)
+        self.assertEqual(progress["Python Developer"], ("Django",))
+        self.assertFalse(
+            app.checkbox(key="learning_roadmap_done_AI/ML Engineer_Python").value
+        )
+
+    def test_resume_changes_preserve_completed_progress_and_restore_it(self) -> None:
+        app = AppTest.from_file(str(self.app_path()))
+        original_resume = "Python SQL REST API Git Django Flask"
+        app.session_state["resume_text"] = original_resume
+        self.run_app(app)
+        self.open_roadmap(app)
+        self.assertEqual(
+            app.selectbox(key="learning_roadmap_career_selector").value,
+            "Python Developer",
+        )
+
+        app.checkbox(
+            key="learning_roadmap_done_Python Developer_PostgreSQL"
+        ).check().run()
+        app.session_state["resume_text"] = (
+            "Python NumPy Pandas Machine Learning PyTorch TensorFlow Neural Networks"
+        )
+        self.run_app(app)
+
+        self.assertEqual(
+            app.selectbox(key="learning_roadmap_career_selector").value,
+            "AI/ML Engineer",
+        )
+        self.assertEqual(
+            app.session_state["learning_roadmap_progress_by_career"][
+                "Python Developer"
+            ],
+            ("PostgreSQL",),
+        )
+
+        app.session_state["resume_text"] = original_resume
+        self.run_app(app)
+        self.assertEqual(
+            app.selectbox(key="learning_roadmap_career_selector").value,
+            "Python Developer",
+        )
+        self.assertTrue(
+            app.checkbox(
+                key="learning_roadmap_done_Python Developer_PostgreSQL"
+            ).value
+        )
+
+    def test_all_missing_skills_completed_shows_100_percent(self) -> None:
+        app = AppTest.from_file(str(self.app_path()))
+        ai_ml_skills = (
+            "Python",
+            "Machine Learning",
+            "Deep Learning",
+            "scikit-learn",
+            "TensorFlow",
+            "PyTorch",
+            "NumPy",
+            "Pandas",
+            "Docker",
+            "Git",
+            "SQL",
+            "FastAPI",
+        )
+        app.session_state["learning_roadmap_progress_by_career"] = {
+            "AI/ML Engineer": ai_ml_skills,
+        }
+        self.run_app(app)
+        self.open_roadmap(app)
+
+        self.assertTrue(any("100.0%" in item.value for item in app.markdown))
+        self.assertTrue(all(checkbox.value for checkbox in app.checkbox))
+        self.assertTrue(
+            any("**Remaining skills:** None" in item.value for item in app.markdown)
+        )
+
+    def test_resume_with_no_missing_skills_renders_empty_roadmap_safely(self) -> None:
+        python_career = next(
+            profile
+            for profile in load_career_catalog()
+            if profile.title == "Python Developer"
+        )
+        app = AppTest.from_file(str(self.app_path()))
+        app.session_state["resume_text"] = " ".join(
+            python_career.core_skills + python_career.supporting_skills
+        )
+        self.run_app(app)
+        self.open_roadmap(app)
+
+        self.assertEqual(len(app.checkbox), 0)
+        self.assertTrue(any("100.0%" in item.value for item in app.markdown))
+        self.assertTrue(
+            any("already covers all tracked skills" in item.value for item in app.success)
+        )
+        self.assertTrue(
+            any("No beginner skills remain" in item.value for item in app.caption)
         )
 
 
@@ -323,6 +600,260 @@ class CareerRecommenderTests(unittest.TestCase):
         self.assertIsInstance(results[0], CareerRecommendation)
         self.assertEqual(results[0].title, "NLP Engineer")
         self.assertGreater(results[0].suitability_score, results[-1].suitability_score)
+
+
+class LearningRoadmapTests(unittest.TestCase):
+    @staticmethod
+    def learning_catalog_path() -> Path:
+        return Path(__file__).resolve().parents[1] / "data" / "learning_paths.json"
+
+    @staticmethod
+    def write_catalog(path: Path, data: object) -> None:
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_valid_catalog_covers_all_37_career_skills(self) -> None:
+        learning_paths = load_learning_catalog()
+        careers = load_career_catalog()
+        career_skills = {
+            skill
+            for career in careers
+            for skill in career.core_skills + career.supporting_skills
+        }
+        catalog_skills = {item.skill for item in learning_paths}
+
+        self.assertEqual(len(career_skills), 37)
+        self.assertEqual(len(catalog_skills), 37)
+        self.assertEqual(len(learning_paths), 37)
+        self.assertTrue(career_skills.issubset(catalog_skills))
+
+    def test_invalid_json_missing_catalog_and_unknown_skills_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_path = Path(tmpdir)
+            missing_path = temp_path / "missing.json"
+            with self.assertRaises(LearningCatalogError):
+                load_learning_catalog(missing_path)
+
+            malformed_path = temp_path / "malformed.json"
+            malformed_path.write_text("{not valid json", encoding="utf-8")
+            with self.assertRaises(LearningCatalogError):
+                load_learning_catalog(malformed_path)
+
+            catalog_data = json.loads(
+                self.learning_catalog_path().read_text(encoding="utf-8")
+            )
+            catalog_data["learning_paths"][0]["skill"] = "MadeUpSkill"
+            unknown_skill_path = temp_path / "unknown_skill.json"
+            self.write_catalog(unknown_skill_path, catalog_data)
+            with self.assertRaisesRegex(LearningCatalogError, "non-canonical"):
+                load_learning_catalog(unknown_skill_path)
+
+    def test_valid_prerequisites_are_present_and_level_ordered(self) -> None:
+        learning_paths = load_learning_catalog()
+        by_skill = {item.skill: item for item in learning_paths}
+        level_order = {"Beginner": 0, "Intermediate": 1, "Advanced": 2}
+
+        for item in learning_paths:
+            for prerequisite in item.prerequisites:
+                with self.subTest(skill=item.skill, prerequisite=prerequisite):
+                    self.assertIn(prerequisite, by_skill)
+                    self.assertLessEqual(
+                        level_order[by_skill[prerequisite].level],
+                        level_order[item.level],
+                    )
+
+    def test_missing_prerequisites_circular_dependencies_and_invalid_levels_fail(self) -> None:
+        source_data = json.loads(
+            self.learning_catalog_path().read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_path = Path(tmpdir)
+
+            missing_reference = json.loads(json.dumps(source_data))
+            next(
+                item
+                for item in missing_reference["learning_paths"]
+                if item["skill"] == "Python"
+            )["prerequisites"] = ["SQLite"]
+            missing_reference_path = temp_path / "missing_reference.json"
+            self.write_catalog(missing_reference_path, missing_reference)
+            with self.assertRaisesRegex(LearningCatalogError, "no learning metadata"):
+                load_learning_catalog(missing_reference_path)
+
+            circular = json.loads(json.dumps(source_data))
+            by_skill = {item["skill"]: item for item in circular["learning_paths"]}
+            by_skill["Python"]["prerequisites"] = ["SQL"]
+            by_skill["SQL"]["prerequisites"] = ["Python"]
+            circular_path = temp_path / "circular.json"
+            self.write_catalog(circular_path, circular)
+            with self.assertRaisesRegex(LearningCatalogError, "Circular"):
+                load_learning_catalog(circular_path)
+
+            invalid_level = json.loads(json.dumps(source_data))
+            next(
+                item
+                for item in invalid_level["learning_paths"]
+                if item["skill"] == "Python"
+            )["prerequisites"] = ["NumPy"]
+            invalid_level_path = temp_path / "invalid_level.json"
+            self.write_catalog(invalid_level_path, invalid_level)
+            with self.assertRaisesRegex(LearningCatalogError, "later learning level"):
+                load_learning_catalog(invalid_level_path)
+
+    def test_ai_ml_and_python_developer_roadmaps_are_generated(self) -> None:
+        ai_ml_roadmap = generate_learning_roadmap("AI/ML Engineer", [])
+        python_roadmap = generate_learning_roadmap(
+            "Python Developer",
+            ["Python 3", "SQL"],
+        )
+
+        self.assertEqual(ai_ml_roadmap.career_title, "AI/ML Engineer")
+        self.assertEqual(ai_ml_roadmap.total_count, 12)
+        self.assertEqual(
+            {step.skill for step in ai_ml_roadmap.steps},
+            {
+                "Python",
+                "Machine Learning",
+                "Deep Learning",
+                "scikit-learn",
+                "TensorFlow",
+                "PyTorch",
+                "NumPy",
+                "Pandas",
+                "Docker",
+                "Git",
+                "SQL",
+                "FastAPI",
+            },
+        )
+        self.assertEqual(python_roadmap.career_title, "Python Developer")
+        self.assertEqual(python_roadmap.total_count, 10)
+        self.assertNotIn("Python", {step.skill for step in python_roadmap.steps})
+        self.assertNotIn("SQL", {step.skill for step in python_roadmap.steps})
+
+    def test_empty_candidate_skills_include_every_career_skill(self) -> None:
+        roadmap = generate_learning_roadmap("Python Developer", [])
+
+        self.assertEqual(roadmap.total_count, 12)
+        self.assertEqual(roadmap.completed_count, 0)
+        self.assertEqual(roadmap.progress_percentage, 0.0)
+        self.assertEqual(len(roadmap.remaining_skills), roadmap.total_count)
+
+    def test_empty_roadmap_is_safe_when_resume_covers_every_career_skill(self) -> None:
+        career = next(
+            profile
+            for profile in load_career_catalog()
+            if profile.title == "Python Developer"
+        )
+        roadmap = generate_learning_roadmap(
+            career.title,
+            career.core_skills + career.supporting_skills,
+        )
+
+        self.assertEqual(roadmap.steps, ())
+        self.assertEqual(roadmap.completed_count, 0)
+        self.assertEqual(roadmap.total_count, 0)
+        self.assertEqual(roadmap.remaining_skills, ())
+        self.assertEqual(roadmap.progress_percentage, 100.0)
+
+    def test_core_priority_and_prerequisite_order_are_preserved(self) -> None:
+        roadmaps = (
+            generate_learning_roadmap("AI/ML Engineer", []),
+            generate_learning_roadmap("Python Developer", []),
+        )
+        level_order = {"Beginner": 0, "Intermediate": 1, "Advanced": 2}
+
+        for roadmap in roadmaps:
+            with self.subTest(career=roadmap.career_title):
+                positions = {
+                    step.skill: index for index, step in enumerate(roadmap.steps)
+                }
+                self.assertEqual(
+                    [level_order[step.level] for step in roadmap.steps],
+                    sorted(level_order[step.level] for step in roadmap.steps),
+                )
+                for step in roadmap.steps:
+                    for prerequisite in step.prerequisites:
+                        if prerequisite in positions:
+                            self.assertLess(positions[prerequisite], positions[step.skill])
+
+        python_roadmap = roadmaps[1]
+        positions = {
+            step.skill: index for index, step in enumerate(python_roadmap.steps)
+        }
+        self.assertLess(positions["REST API"], positions["PostgreSQL"])
+
+    def test_unknown_career_is_rejected(self) -> None:
+        with self.assertRaisesRegex(InvalidRoadmapInputError, "Unknown career"):
+            generate_learning_roadmap("Unknown Career", [])
+
+    def test_progress_supports_zero_partial_duplicate_and_full_completion(self) -> None:
+        initial = generate_learning_roadmap("Python Developer", [])
+        first_skill = initial.steps[0].skill
+        partial = generate_learning_roadmap(
+            "Python Developer",
+            [],
+            [first_skill, first_skill],
+        )
+        complete = generate_learning_roadmap(
+            "Python Developer",
+            [],
+            [step.skill for step in initial.steps],
+        )
+
+        self.assertEqual(initial.progress_percentage, 0.0)
+        self.assertEqual(initial.completed_count, 0)
+        self.assertEqual(partial.completed_count, 1)
+        self.assertEqual(partial.completed_skills, (first_skill,))
+        self.assertEqual(
+            partial.progress_percentage,
+            round(100 / initial.total_count, 1),
+        )
+        self.assertEqual(complete.completed_count, complete.total_count)
+        self.assertEqual(complete.progress_percentage, 100.0)
+        self.assertEqual(complete.remaining_skills, ())
+
+    def test_unknown_or_already_known_completed_skills_are_rejected(self) -> None:
+        for candidate_skills, completed_skills in (
+            ([], ["MadeUpSkill"]),
+            (["Python"], ["Python"]),
+        ):
+            with self.subTest(
+                candidate_skills=candidate_skills,
+                completed_skills=completed_skills,
+            ):
+                with self.assertRaises(InvalidRoadmapInputError):
+                    generate_learning_roadmap(
+                        "Python Developer",
+                        candidate_skills,
+                        completed_skills,
+                    )
+
+    def test_invalid_candidate_and_completed_skill_lists_are_rejected(self) -> None:
+        for candidate_skills in ("Python", b"Python", None, 42, ["Python", 123]):
+            with self.subTest(candidate_skills=candidate_skills):
+                with self.assertRaises(InvalidRoadmapInputError):
+                    generate_learning_roadmap(
+                        "Python Developer",
+                        candidate_skills,  # type: ignore[arg-type]
+                    )
+
+        for completed_skills in ("Python", b"Python", None, 42, ["Python", 123]):
+            with self.subTest(completed_skills=completed_skills):
+                with self.assertRaises(InvalidRoadmapInputError):
+                    generate_learning_roadmap(
+                        "Python Developer",
+                        [],
+                        completed_skills,  # type: ignore[arg-type]
+                    )
+
+    def test_invalid_career_titles_are_rejected(self) -> None:
+        for career_title in ("", None, 42):
+            with self.subTest(career_title=career_title):
+                with self.assertRaises(InvalidRoadmapInputError):
+                    generate_learning_roadmap(
+                        career_title,  # type: ignore[arg-type]
+                        [],
+                    )
 
 
 class ResumeParserTests(unittest.TestCase):

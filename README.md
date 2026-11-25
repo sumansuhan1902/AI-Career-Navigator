@@ -17,9 +17,30 @@ Job seekers often need to translate varied experience into role-specific skills 
 - On-demand job matching combining taxonomy skill coverage with TF-IDF cosine similarity, with categorized matches, missing requirements, additional candidate skills, strengths, and improvement suggestions.
 - Resume text and job-description input held only in the active Streamlit session.
 - Explainable career recommendations ranked by weighted core (70%) and supporting (30%) skill coverage across six curated roles (`data/careers.json`), with missing-skill gaps and suggested next skills to learn.
+- Personalized learning roadmaps for career skills, with dependency-aware ordering, practical projects, milestones, and session-based completion tracking.
 - SQLite connection helper for future persistence; it is not currently used by the app.
 
 Skill extraction is deterministic taxonomy-based keyword matching, not an AI model or semantic NLP system. TF-IDF similarity is lexical and does not infer meaning. Both the job match score and the career suitability score are heuristic compatibility estimates, not probabilities of being hired. The engine does not evaluate proficiency or account for context and negation.
+
+## Feature 05: Personalized Learning Roadmap
+
+The **Learning Roadmap** dashboard page turns each curated career profile into an ordered plan for learning its skills.
+
+### Roadmap architecture
+
+- `data/careers.json` defines each career's core and supporting skills, while `data/skills.json` provides the canonical skill names and aliases.
+- `data/learning_paths.json` provides learning metadata for all 37 career skills: a Beginner, Intermediate, or Advanced level, prerequisites, a practical mini-project, and a completion milestone. It does not depend on external course links or certifications.
+- `modules/learning_roadmap.py` loads and validates the catalog against the canonical skill taxonomy and career profiles. It checks career-skill coverage, prerequisite references and levels, and circular dependencies before generating a roadmap.
+- The roadmap engine orders missing skills so prerequisites come first and prioritizes core skills when dependencies allow. It groups steps by learning level and calculates completed skills, remaining skills, and the completion percentage.
+- `app.py` provides the Streamlit interface, resume-based personalization, career selection, completion controls, and session-state progress handling.
+
+### Personalization and progress
+
+When resume text is available, the app extracts skills using the existing taxonomy and selects the highest-ranked career recommendation by default. Skills already detected in the resume are excluded from that career's learning steps. Users can choose another career. Without a resume, users can select any career and see its complete roadmap.
+
+Each step includes its prerequisites, a practical project suggestion, and a milestone describing an observable outcome. The dashboard lists completed and remaining skills, groups the steps into Beginner, Intermediate, and Advanced stages, and displays overall progress. If the resume already covers all tracked skills for a career, the roadmap is empty and completion is shown as 100%.
+
+Progress is separate for each career and is held only in Streamlit session state. It is retained while that active session continues, including when navigating between pages or switching careers. Progress is **not** written to SQLite, a file, or another persistent store, and is not guaranteed to remain available in a later session or after the active session ends.
 
 ## Technology Stack
 
@@ -91,10 +112,10 @@ Run the application:
 python -m streamlit run app.py
 ```
 
-Run the focused tests:
+Run the complete offline-safe test suite:
 
 ```powershell
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests -p "test*.py" -v
 ```
 
 ## Project Structure
@@ -110,14 +131,16 @@ AI-Career-Navigator/
 │   ├── resume_parser.py         # In-memory PDF text extraction
 │   ├── skill_extractor.py       # Taxonomy-based skill extraction and comparison
 │   ├── job_matcher.py           # Skill coverage, TF-IDF similarity, and explainable results
-│   └── career_recommender.py    # Explainable career path recommendations
+│   ├── career_recommender.py    # Explainable career path recommendations
+│   └── learning_roadmap.py      # Validated catalog and dependency-aware roadmap engine
 ├── database/
 │   └── db.py                    # SQLite connection helper; persistence not yet wired into the app
 ├── data/
 │   ├── skills.json              # Curated canonical skills and aliases by category
-│   └── careers.json             # Curated career roles with core and supporting skills
+│   ├── careers.json             # Curated career roles with core and supporting skills
+│   └── learning_paths.json      # Per-skill levels, prerequisites, projects, and milestones
 └── tests/
-    └── test_app.py              # Tests PDF parsing, skill extraction, job matching, and career recommendations
+    └── test_app.py              # Unit and dashboard tests for parsing, matching, careers, and roadmaps
 ```
 
 ## Security and runtime notes

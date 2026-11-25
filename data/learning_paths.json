@@ -1,0 +1,355 @@
+{
+  "learning_paths": [
+    {
+      "skill": "Python",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Build a command-line study planner that adds, lists, and completes tasks.",
+      "milestone": "Write and run a small program using variables, conditionals, loops, functions, and basic collections."
+    },
+    {
+      "skill": "SQL",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Create a small student-club database and write queries to filter and summarize its members and events.",
+      "milestone": "Create a table and use SELECT, WHERE, ORDER BY, GROUP BY, and basic joins to answer questions about sample data."
+    },
+    {
+      "skill": "Git",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Track a small class assignment through several commits and demonstrate a branch-based change.",
+      "milestone": "Initialize a repository, make descriptive commits, inspect history, create a branch, and merge it."
+    },
+    {
+      "skill": "Problem Solving",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Implement a program that finds duplicate entries in a list and explain its approach with test cases.",
+      "milestone": "Break a programming problem into steps, implement a solution, and verify normal and edge cases."
+    },
+    {
+      "skill": "Communication",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Present a short walkthrough of a class project, including its goal, design, and results.",
+      "milestone": "Explain a technical project clearly to a peer and respond to questions using concrete examples."
+    },
+    {
+      "skill": "Teamwork",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Work with classmates on a shared task board and deliver a small feature with agreed responsibilities.",
+      "milestone": "Contribute an assigned part of a group project, coordinate a handoff, and incorporate teammate feedback."
+    },
+    {
+      "skill": "Java",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Build a command-line grade tracker that stores course scores and calculates averages.",
+      "milestone": "Write a small Java application using classes, methods, conditionals, loops, and collections."
+    },
+    {
+      "skill": "JavaScript",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Create an interactive browser-based flashcard page with add, reveal, and next-card actions.",
+      "milestone": "Use JavaScript variables, functions, arrays, objects, and event handlers in a working page."
+    },
+    {
+      "skill": "Linux",
+      "level": "Beginner",
+      "prerequisites": [],
+      "mini_project": "Organize a project directory and write a shell command sequence to locate and summarize its files.",
+      "milestone": "Navigate directories, inspect files, manage basic permissions, and run common command-line utilities."
+    },
+    {
+      "skill": "Pandas",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "NumPy"
+      ],
+      "mini_project": "Load a public class timetable CSV, clean missing values, and produce a summary by department.",
+      "milestone": "Load tabular data, filter and transform a DataFrame, handle missing values, and export a cleaned result."
+    },
+    {
+      "skill": "NumPy",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python"
+      ],
+      "mini_project": "Analyze sensor readings with arrays by calculating ranges, averages, and normalized values.",
+      "milestone": "Create and transform arrays and use vectorized operations for a numerical analysis without row-by-row loops."
+    },
+    {
+      "skill": "REST API",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python"
+      ],
+      "mini_project": "Design a small inventory API with documented endpoints for listing, adding, and updating items.",
+      "milestone": "Implement or test resource-based endpoints using HTTP methods, status codes, JSON, and clear request validation."
+    },
+    {
+      "skill": "Django",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "REST API"
+      ],
+      "mini_project": "Build a campus event board with event listings, detail pages, and a simple submission form.",
+      "milestone": "Create a Django application with models, URL routing, views, templates, and validated form input."
+    },
+    {
+      "skill": "Flask",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "REST API"
+      ],
+      "mini_project": "Create a Flask API for tracking personal reading-list items with create, list, update, and delete operations.",
+      "milestone": "Build a Flask app with route handlers, JSON responses, input validation, and automated endpoint checks."
+    },
+    {
+      "skill": "PostgreSQL",
+      "level": "Intermediate",
+      "prerequisites": [
+        "SQL"
+      ],
+      "mini_project": "Model a student project tracker in PostgreSQL and query projects, contributors, and due dates.",
+      "milestone": "Create related tables with constraints, load sample records, and write joins and aggregate queries."
+    },
+    {
+      "skill": "Docker",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Git",
+        "Linux"
+      ],
+      "mini_project": "Containerize a small command-line or web application and document how to build and run it.",
+      "milestone": "Build an image from a Dockerfile, run a container with configuration, and explain the image-to-container workflow."
+    },
+    {
+      "skill": "FastAPI",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "REST API"
+      ],
+      "mini_project": "Create a FastAPI service that records study sessions and validates incoming request data.",
+      "milestone": "Implement typed API endpoints with request validation, appropriate status codes, and generated interactive API documentation."
+    },
+    {
+      "skill": "Data Analysis",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "SQL",
+        "Pandas"
+      ],
+      "mini_project": "Explore a public campus or transit dataset and write a short report answering three measurable questions.",
+      "milestone": "Clean a dataset, calculate relevant summaries, and communicate evidence-based findings with reproducible steps."
+    },
+    {
+      "skill": "Data Visualization",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Data Analysis",
+        "Pandas"
+      ],
+      "mini_project": "Turn a semester of study-session records into a small dashboard with clearly labeled charts.",
+      "milestone": "Choose suitable charts for a dataset, label units and axes, and present a visual summary that answers a specific question."
+    },
+    {
+      "skill": "A/B Testing",
+      "level": "Advanced",
+      "prerequisites": [
+        "Data Analysis",
+        "Statistical Analysis"
+      ],
+      "mini_project": "Analyze a simulated experiment comparing two versions of a campus event signup page and report uncertainty around the result.",
+      "milestone": "Define a measurable outcome, compare experiment groups with an appropriate statistical method, and explain limits on the conclusion."
+    },
+    {
+      "skill": "Statistical Analysis",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Data Analysis",
+        "NumPy"
+      ],
+      "mini_project": "Compare two groups of sample measurements and report descriptive statistics with an uncertainty-aware interpretation.",
+      "milestone": "Calculate descriptive statistics, explain sampling variability, and select and interpret a basic statistical test."
+    },
+    {
+      "skill": "ETL",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "SQL"
+      ],
+      "mini_project": "Extract rows from two local CSV files, normalize their columns, and load the result into a relational table.",
+      "milestone": "Build a repeatable extract-transform-load script that validates input, handles bad rows, and verifies loaded records."
+    },
+    {
+      "skill": "MySQL",
+      "level": "Intermediate",
+      "prerequisites": [
+        "SQL"
+      ],
+      "mini_project": "Create a small library-loan schema in MySQL and query overdue items and borrowing totals.",
+      "milestone": "Define tables and relationships, insert sample data, and use joins and aggregation to answer practical questions."
+    },
+    {
+      "skill": "CI/CD",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Git",
+        "Linux"
+      ],
+      "mini_project": "Set up an automated repository workflow that runs a project's unit tests when changes are submitted.",
+      "milestone": "Configure a repeatable pipeline that checks out source, installs declared dependencies, runs tests, and reports failures."
+    },
+    {
+      "skill": "Backend Development",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "REST API",
+        "SQL"
+      ],
+      "mini_project": "Build a backend service for a campus equipment checkout system with persistent records and input validation.",
+      "milestone": "Deliver a small service with separated routes and data access, validated inputs, and tests for key behaviors."
+    },
+    {
+      "skill": "Machine Learning",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "NumPy",
+        "Statistical Analysis"
+      ],
+      "mini_project": "Train and evaluate a simple model that predicts a clearly defined outcome from a public tabular dataset.",
+      "milestone": "Create a train/test split, fit a baseline model, choose an appropriate metric, and explain its limitations."
+    },
+    {
+      "skill": "scikit-learn",
+      "level": "Intermediate",
+      "prerequisites": [
+        "Python",
+        "NumPy",
+        "Pandas",
+        "Machine Learning"
+      ],
+      "mini_project": "Build a reproducible scikit-learn pipeline that preprocesses a tabular dataset and compares two baseline models.",
+      "milestone": "Use an estimator and preprocessing pipeline, evaluate held-out data, and avoid fitting transformations on test data."
+    },
+    {
+      "skill": "Data Science",
+      "level": "Advanced",
+      "prerequisites": [
+        "Data Analysis",
+        "Statistical Analysis",
+        "Machine Learning"
+      ],
+      "mini_project": "Complete an end-to-end investigation of a public dataset, from a testable question through model evaluation and a written conclusion.",
+      "milestone": "Produce a reproducible analysis that connects a well-defined question, data preparation, appropriate methods, evaluation, and caveats."
+    },
+    {
+      "skill": "SciPy",
+      "level": "Advanced",
+      "prerequisites": [
+        "Python",
+        "NumPy",
+        "Statistical Analysis"
+      ],
+      "mini_project": "Use SciPy to analyze a measurement dataset with a justified statistical test and a numerical optimization example.",
+      "milestone": "Select an appropriate SciPy numerical or statistical routine, validate its assumptions, and interpret its output."
+    },
+    {
+      "skill": "Feature Engineering",
+      "level": "Advanced",
+      "prerequisites": [
+        "Pandas",
+        "NumPy",
+        "Machine Learning"
+      ],
+      "mini_project": "Compare a baseline model with a version using documented date, category, or text-derived features on public data.",
+      "milestone": "Create features using training data only, compare model results consistently, and document potential leakage risks."
+    },
+    {
+      "skill": "Neural Networks",
+      "level": "Advanced",
+      "prerequisites": [
+        "Machine Learning",
+        "NumPy"
+      ],
+      "mini_project": "Implement and evaluate a small neural network on a compact, labeled dataset, then inspect its errors.",
+      "milestone": "Explain the network's input, layers, loss, and training process and evaluate it against a simple baseline."
+    },
+    {
+      "skill": "Deep Learning",
+      "level": "Advanced",
+      "prerequisites": [
+        "Machine Learning",
+        "Neural Networks",
+        "PyTorch"
+      ],
+      "mini_project": "Train a small neural network on a public image or text dataset and record its validation results.",
+      "milestone": "Build a training and validation loop, track loss and a suitable metric, and identify overfitting in the results."
+    },
+    {
+      "skill": "TensorFlow",
+      "level": "Advanced",
+      "prerequisites": [
+        "Python",
+        "NumPy",
+        "Neural Networks"
+      ],
+      "mini_project": "Train a compact TensorFlow model on a public dataset and save a reproducible evaluation summary.",
+      "milestone": "Define, train, and evaluate a TensorFlow model while keeping validation data separate from training."
+    },
+    {
+      "skill": "PyTorch",
+      "level": "Advanced",
+      "prerequisites": [
+        "Python",
+        "NumPy",
+        "Neural Networks"
+      ],
+      "mini_project": "Create a PyTorch training loop for a small classification dataset and inspect incorrect predictions.",
+      "milestone": "Implement a dataset and training loop, evaluate on held-out data, and explain tensor shapes and gradient updates."
+    },
+    {
+      "skill": "Natural Language Processing",
+      "level": "Advanced",
+      "prerequisites": [
+        "Python",
+        "Machine Learning"
+      ],
+      "mini_project": "Build a text-classification baseline for a small public set of reviews and review its most common errors.",
+      "milestone": "Prepare text data, establish a baseline, evaluate with suitable metrics, and explain limitations such as bias or ambiguity."
+    },
+    {
+      "skill": "Large Language Models",
+      "level": "Advanced",
+      "prerequisites": [
+        "Natural Language Processing",
+        "Deep Learning"
+      ],
+      "mini_project": "Create a small prompt-based study assistant over a short set of supplied notes and test it with factual and unanswerable questions.",
+      "milestone": "Demonstrate a language-model workflow, evaluate answer quality with a fixed test set, and document unsupported-answer risks."
+    },
+    {
+      "skill": "Generative AI",
+      "level": "Advanced",
+      "prerequisites": [
+        "Large Language Models",
+        "Natural Language Processing",
+        "Deep Learning"
+      ],
+      "mini_project": "Prototype a text-generation feature for a study tool and add checks that flag missing or unsupported source details.",
+      "milestone": "Build and evaluate a bounded generative workflow, record failure cases, and describe safeguards and limitations."
+    }
+  ]
+}

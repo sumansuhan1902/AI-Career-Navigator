@@ -18,12 +18,20 @@ from modules.career_recommender import (
     CareerCatalogError,
     CareerRecommendation,
     InvalidCareerRecommendationInputError,
+    load_career_catalog,
+    recommend_careers_from_skills,
     recommend_careers_from_text,
 )
 from modules.job_matcher import (
     InvalidJobMatchingInputError,
     JobMatchAnalysis,
     match_job,
+)
+from modules.learning_roadmap import (
+    InvalidRoadmapInputError,
+    LearningCatalogError,
+    RoadmapStep,
+    generate_learning_roadmap,
 )
 from modules.skill_extractor import SkillExtractionError, extract_skills
 
@@ -36,7 +44,19 @@ st.set_page_config(
 )
 
 
-PAGE_NAMES = ("Home", "Resume & Job", "Skill Analysis", "Career Recommendations")
+PAGE_NAMES = (
+    "Home",
+    "Resume & Job",
+    "Skill Analysis",
+    "Career Recommendations",
+    "Learning Roadmap",
+)
+
+_ROADMAP_PROGRESS_STATE = "learning_roadmap_progress_by_career"
+_ROADMAP_SELECTED_CAREER_STATE = "learning_roadmap_selected_career"
+_ROADMAP_CAREER_WIDGET_KEY = "learning_roadmap_career_selector"
+_ROADMAP_RESUME_SKILL_SIGNATURE = "learning_roadmap_resume_skill_signature"
+_ROADMAP_RESET_CONFIRMATION_STATE = "learning_roadmap_reset_confirmation"
 
 
 def apply_styles() -> None:
@@ -577,6 +597,268 @@ def render_career_recommendations() -> None:
         render_career_recommendation_card(index, recommendation)
 
 
+def update_learning_roadmap_progress(
+    career_title: str,
+    skill: str,
+    checkbox_key: str,
+) -> None:
+    """Persist one checkbox change without mixing progress across careers."""
+    completed_by_career = dict(
+        st.session_state.get(_ROADMAP_PROGRESS_STATE, {})
+    )
+    completed_skills = set(completed_by_career.get(career_title, ()))
+    if st.session_state.get(checkbox_key, False):
+        completed_skills.add(skill)
+    else:
+        completed_skills.discard(skill)
+    completed_by_career[career_title] = tuple(sorted(completed_skills))
+    st.session_state[_ROADMAP_PROGRESS_STATE] = completed_by_career
+
+
+def begin_learning_roadmap_reset(career_title: str) -> None:
+    """Ask for confirmation before clearing one career's progress."""
+    st.session_state[_ROADMAP_RESET_CONFIRMATION_STATE] = career_title
+
+
+def clear_learning_roadmap_reset_confirmation() -> None:
+    """Dismiss the pending progress reset confirmation."""
+    st.session_state.pop(_ROADMAP_RESET_CONFIRMATION_STATE, None)
+
+
+def reset_learning_roadmap_progress(
+    career_title: str,
+    career_skills: tuple[str, ...],
+) -> None:
+    """Clear only the selected career's saved progress and checkbox state."""
+    completed_by_career = dict(st.session_state.get(_ROADMAP_PROGRESS_STATE, {}))
+    completed_by_career.pop(career_title, None)
+    st.session_state[_ROADMAP_PROGRESS_STATE] = completed_by_career
+    for skill in career_skills:
+        checkbox_key = f"learning_roadmap_done_{career_title}_{skill}"
+        st.session_state[checkbox_key] = False
+    clear_learning_roadmap_reset_confirmation()
+
+
+def render_learning_roadmap_step(
+    career_title: str,
+    step: RoadmapStep,
+) -> None:
+    """Render one roadmap step and its session-persisted completion checkbox."""
+    checkbox_key = f"learning_roadmap_done_{career_title}_{step.skill}"
+    if checkbox_key not in st.session_state:
+        st.session_state[checkbox_key] = step.is_completed
+
+    with st.container(border=True):
+        st.checkbox(
+            f"{step.skill} ({step.level})",
+            key=checkbox_key,
+            on_change=update_learning_roadmap_progress,
+            args=(career_title, step.skill, checkbox_key),
+        )
+        st.caption(
+            "Core skill" if step.is_core_skill else "Supporting skill"
+        )
+        prerequisites = ", ".join(step.prerequisites) or "None"
+        st.write(f"Prerequisites: {prerequisites}")
+        st.markdown(f"**Mini-project:** {step.mini_project}")
+        st.markdown(f"**Completion milestone:** {step.milestone}")
+
+
+def render_learning_roadmap() -> None:
+    """Render a resume-personalized or complete career learning roadmap."""
+    render_heading(
+        "Career development",
+        "Learning roadmap",
+        "Track practical learning milestones for a career path that interests you.",
+    )
+    try:
+        careers = load_career_catalog()
+    except CareerCatalogError as error:
+        st.error(f"Learning roadmaps are unavailable: {error}")
+        return
+
+    career_titles = [career.title for career in careers]
+    resume_text = st.session_state.get("resume_text")
+    if resume_text is not None and not isinstance(resume_text, str):
+        st.error("Resume text is invalid. Upload a readable PDF in Resume & Job.")
+        return
+
+    has_resume = isinstance(resume_text, str) and bool(resume_text.strip())
+    candidate_skills: list[str] = []
+    recommended_career_title: str | None = None
+    if has_resume:
+        try:
+            candidate_skills = extract_skills(resume_text)
+            recommendations = recommend_careers_from_skills(
+                candidate_skills,
+                top_n=1,
+            )
+        except (
+            CareerCatalogError,
+            InvalidCareerRecommendationInputError,
+            SkillExtractionError,
+        ) as error:
+            st.error(f"Career recommendations are unavailable: {error}")
+            return
+        if not recommendations:
+            st.error("No career recommendations are available.")
+            return
+
+        recommended_career_title = recommendations[0].title
+        skill_signature = tuple(candidate_skills)
+        if st.session_state.get(_ROADMAP_RESUME_SKILL_SIGNATURE) != skill_signature:
+            st.session_state[_ROADMAP_RESUME_SKILL_SIGNATURE] = skill_signature
+            st.session_state[_ROADMAP_SELECTED_CAREER_STATE] = (
+                recommended_career_title
+            )
+            st.session_state[_ROADMAP_CAREER_WIDGET_KEY] = (
+                recommended_career_title
+            )
+        elif st.session_state.get(_ROADMAP_CAREER_WIDGET_KEY) not in career_titles:
+            selected_career = st.session_state.get(
+                _ROADMAP_SELECTED_CAREER_STATE
+            )
+            st.session_state[_ROADMAP_CAREER_WIDGET_KEY] = (
+                selected_career
+                if selected_career in career_titles
+                else recommended_career_title
+            )
+
+        if candidate_skills:
+            st.caption(
+                f"Detected resume skills ({len(candidate_skills)}): "
+                + ", ".join(candidate_skills)
+            )
+        else:
+            st.info(
+                "No curated taxonomy skills were detected. The selected career's "
+                "complete roadmap is shown; review the resume text or skill taxonomy."
+            )
+    else:
+        st.session_state[_ROADMAP_RESUME_SKILL_SIGNATURE] = None
+        if st.session_state.get(_ROADMAP_CAREER_WIDGET_KEY) not in career_titles:
+            selected_career = st.session_state.get(
+                _ROADMAP_SELECTED_CAREER_STATE
+            )
+            st.session_state[_ROADMAP_CAREER_WIDGET_KEY] = (
+                selected_career if selected_career in career_titles else career_titles[0]
+            )
+        st.info(
+            "Upload a resume in Resume & Job to personalize this roadmap and "
+            "automatically select your highest-ranked career recommendation."
+        )
+
+    career_title = st.selectbox(
+        "Career path",
+        career_titles,
+        key=_ROADMAP_CAREER_WIDGET_KEY,
+        on_change=clear_learning_roadmap_reset_confirmation,
+    )
+    st.session_state[_ROADMAP_SELECTED_CAREER_STATE] = career_title
+    career = next(profile for profile in careers if profile.title == career_title)
+
+    completed_by_career = st.session_state.setdefault(
+        _ROADMAP_PROGRESS_STATE,
+        {},
+    )
+    if not isinstance(completed_by_career, dict):
+        st.error("Learning progress is invalid for this session.")
+        return
+    career_skills = set(career.core_skills + career.supporting_skills)
+    raw_saved_completed_skills = completed_by_career.get(career_title, ())
+    if (
+        not isinstance(raw_saved_completed_skills, (tuple, list, set))
+        or any(
+            not isinstance(skill, str)
+            for skill in raw_saved_completed_skills
+        )
+    ):
+        st.error("Saved learning progress is invalid for this career.")
+        return
+    saved_completed_skills = (
+        set(raw_saved_completed_skills) & career_skills
+    )
+    if saved_completed_skills:
+        completed_by_career[career_title] = tuple(
+            sorted(saved_completed_skills)
+        )
+    else:
+        completed_by_career.pop(career_title, None)
+    st.session_state[_ROADMAP_PROGRESS_STATE] = completed_by_career
+    currently_missing_skills = career_skills - set(candidate_skills)
+    completed_skills = saved_completed_skills & currently_missing_skills
+    try:
+        roadmap = generate_learning_roadmap(
+            career_title,
+            candidate_skills,
+            completed_skills,
+        )
+    except (InvalidRoadmapInputError, LearningCatalogError) as error:
+        st.error(f"Learning roadmap is unavailable: {error}")
+        return
+
+    st.subheader(career.title)
+    st.write(career.description)
+    render_metric(
+        "Overall completion",
+        f"{roadmap.progress_percentage:.1f}%",
+    )
+    st.progress(roadmap.progress_percentage / 100)
+    st.caption(
+        f"{roadmap.completed_count} of {roadmap.total_count} skills complete."
+    )
+    st.write(
+        "**Completed skills:** "
+        + (", ".join(roadmap.completed_skills) or "None")
+    )
+    st.write(
+        "**Remaining skills:** "
+        + (", ".join(roadmap.remaining_skills) or "None")
+    )
+
+    if st.session_state.get(_ROADMAP_RESET_CONFIRMATION_STATE) == career_title:
+        st.warning(
+            f"Reset all learning progress for {career_title}? "
+            "This cannot be undone."
+        )
+        confirm_column, cancel_column = st.columns(2)
+        with confirm_column:
+            st.button(
+                "Confirm reset",
+                key=f"learning_roadmap_confirm_reset_{career_title}",
+                on_click=reset_learning_roadmap_progress,
+                args=(career_title, tuple(sorted(career_skills))),
+            )
+        with cancel_column:
+            st.button(
+                "Keep progress",
+                key=f"learning_roadmap_cancel_reset_{career_title}",
+                on_click=clear_learning_roadmap_reset_confirmation,
+            )
+    else:
+        st.button(
+            "Reset progress for this career",
+            key=f"learning_roadmap_reset_{career_title}",
+            on_click=begin_learning_roadmap_reset,
+            args=(career_title,),
+        )
+
+    if not roadmap.steps:
+        st.success("Your resume already covers all tracked skills for this career.")
+
+    for stage_name, stage_steps in (
+        ("Beginner", roadmap.beginner_steps),
+        ("Intermediate", roadmap.intermediate_steps),
+        ("Advanced", roadmap.advanced_steps),
+    ):
+        st.subheader(stage_name)
+        if not stage_steps:
+            st.caption(f"No {stage_name.lower()} skills remain in this roadmap.")
+            continue
+        for step in stage_steps:
+            render_learning_roadmap_step(career_title, step)
+
+
 def main() -> None:
     apply_styles()
     with st.sidebar:
@@ -600,8 +882,10 @@ def main() -> None:
         render_resume_and_job()
     elif selected_page == "Skill Analysis":
         render_skill_analysis()
-    else:
+    elif selected_page == "Career Recommendations":
         render_career_recommendations()
+    else:
+        render_learning_roadmap()
 
 
 if __name__ == "__main__":
