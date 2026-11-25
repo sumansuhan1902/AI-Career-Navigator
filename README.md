@@ -38,13 +38,13 @@ The **Learning Roadmap** dashboard page turns each curated career profile into a
 
 When resume text is available, the app extracts skills using the existing taxonomy and selects the highest-ranked career recommendation by default. Skills already detected in the resume are excluded from that career's learning steps. Users can choose another career. Without a resume, users can select any career and see its complete roadmap.
 
-Each step includes its prerequisites, a practical project suggestion, and a milestone describing an observable outcome. The dashboard lists completed and remaining skills, groups the steps into Beginner, Intermediate, and Advanced stages, and displays overall progress. If the resume already covers all tracked skills for a career, the roadmap is empty and completion is shown as 100%.
+Each step includes its prerequisites, a practical project suggestion, and a milestone describing an observable outcome. The dashboard lists completed and remaining skills, groups the steps into Beginner, Intermediate, and Advanced stages, and displays overall progress. If the resume already covers all tracked skills for a career, the roadmap is empty and completion displays as **N/A** because no skills are being tracked.
 
 Progress is separate for each career and is held only in Streamlit session state. It is retained while that active session continues, including when navigating between pages or switching careers. Progress is **not** written to SQLite, a file, or another persistent store, and is not guaranteed to remain available in a later session or after the active session ends.
 
 ## Technology Stack
 
-- Python 3.10 or later
+- Python 3.11 or later
 - Streamlit for the dashboard
 - Pandas and NumPy remain available for future data preparation; the default matcher uses built-in Python data structures.
 - SQLite through Python's standard-library `sqlite3` module
@@ -112,6 +112,8 @@ Run the application:
 python -m streamlit run app.py
 ```
 
+The global light theme, including colors, typography, spacing, and widget styling, is configured in `.streamlit/config.toml`. App-owned visual components use the shared responsive rules in `assets/styles.css`, which preserves the theme's visual treatment for the brand mark, headings, metric cards, and status panels.
+
 Run the complete offline-safe test suite:
 
 ```powershell
@@ -123,7 +125,12 @@ python -m unittest discover -s tests -p "test*.py" -v
 ```text
 AI-Career-Navigator/
 ├── app.py                       # Streamlit dashboard and input workflow
-├── requirements.txt             # Runtime and planned data/model dependencies
+├── .streamlit/
+│   └── config.toml              # Global Streamlit theme and 10 MB upload limit
+├── assets/
+│   └── styles.css               # Responsive styling for app-owned visual components
+├── requirements.txt             # App runtime and optional analysis dependencies
+├── requirements.lock.txt        # Pinned dependency versions and hashes
 ├── README.md                    # Project overview, setup, and implementation status
 ├── .gitignore                   # Python, local environment, secrets, and database exclusions
 ├── modules/
@@ -143,6 +150,8 @@ AI-Career-Navigator/
     └── test_app.py              # Unit and dashboard tests for parsing, matching, careers, and roadmaps
 ```
 
+The dashboard has five navigable pages: **Home**, **Resume & Job**, **Skill Analysis**, **Career Recommendations**, and **Learning Roadmap**. Career recommendations and resume-personalized roadmaps are implemented and use the curated career and skill catalogs described above.
+
 ## Security and runtime notes
 
 - PDF uploads are limited to 10 MB in Streamlit and the parser, and documents over 20 pages are rejected before text extraction.
@@ -153,6 +162,5 @@ AI-Career-Navigator/
 
 - Expand and validate taxonomy coverage against representative resumes and job descriptions.
 - Improve context-aware disambiguation and evaluate extraction precision and recall.
-- Provide career-path suggestions with transparent evidence and user controls.
 - Add consent-based persistence, retention controls, and database migrations.
-- Expand automated tests for matching quality, accessibility, and UI workflows.
+- Expand automated tests for matching quality and accessibility.

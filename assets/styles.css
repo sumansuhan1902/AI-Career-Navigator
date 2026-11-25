@@ -1,0 +1,137 @@
+:root {
+    --color-background: #F4F7FA;
+    --color-surface: #FFFFFF;
+    --color-text: #172B3A;
+    --color-muted: #5F6F7B;
+    --color-primary: #087E78;
+    --color-primary-soft: #E3F3F0;
+    --color-border: #DCE5E8;
+    --color-caution: #A96321;
+    --shadow-card: 0 2px 8px rgba(23, 43, 58, 0.05);
+    --radius-card: 12px;
+}
+
+body {
+    color: var(--color-text);
+    font-family: "DM Sans", "Segoe UI", sans-serif;
+}
+
+.brand-mark {
+    align-items: center;
+    color: var(--color-text);
+    display: flex;
+    font: 700 1.0625rem "Manrope", "Segoe UI", sans-serif;
+    gap: 0.625rem;
+    margin: 0 0 1.5rem;
+}
+
+.brand-icon {
+    align-items: center;
+    background: var(--color-primary);
+    border-radius: 0.625rem;
+    color: var(--color-surface);
+    display: inline-flex;
+    height: 2.125rem;
+    justify-content: center;
+    width: 2.125rem;
+}
+
+.eyebrow {
+    color: var(--color-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.page-heading {
+    color: var(--color-text);
+    font: 700 clamp(1.75rem, 3vw, 2rem) / 1.2 "Manrope", "Segoe UI", sans-serif;
+    margin: 0.25rem 0 0.375rem;
+}
+
+.page-subtitle {
+    color: var(--color-muted);
+    margin: 0 0 1.5rem;
+}
+
+.metric-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    min-height: 7rem;
+    padding: 1.125rem 1.25rem;
+}
+
+.metric-label {
+    color: var(--color-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.metric-value {
+    color: var(--color-text);
+    font: 700 1.25rem "Manrope", "Segoe UI", sans-serif;
+    margin-top: 0.6875rem;
+}
+
+.section-title {
+    color: var(--color-text);
+    font: 700 1.125rem "Manrope", "Segoe UI", sans-serif;
+    margin: 1.75rem 0 0.625rem;
+}
+
+.status-panel {
+    background: var(--color-primary-soft);
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-primary);
+    border-radius: 0.625rem;
+    color: var(--color-text);
+    padding: 1.125rem 1.25rem;
+}
+
+.status-panel strong {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.status-panel span {
+    color: var(--color-muted);
+    font-size: 0.875rem;
+}
+
+.prototype-tag {
+    background: var(--color-surface);
+    border: 1px solid #E8CFB4;
+    border-radius: 999px;
+    color: var(--color-caution);
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.3125rem 0.5625rem;
+}
+
+:focus-visible {
+    outline: 3px solid var(--color-primary) !important;
+    outline-offset: 2px !important;
+}
+
+@media (max-width: 720px) {
+    .brand-mark {
+        margin-bottom: 1rem;
+    }
+
+    .page-subtitle {
+        margin-bottom: 1.125rem;
+    }
+
+    .metric-card {
+        min-height: auto;
+        padding: 1rem;
+    }
+
+    .status-panel {
+        padding: 1rem;
+    }
+}

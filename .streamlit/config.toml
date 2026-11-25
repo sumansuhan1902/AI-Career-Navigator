@@ -1,2 +1,36 @@
 [server]
 maxUploadSize = 10
+
+[theme]
+base = "light"
+primaryColor = "#087E78"
+backgroundColor = "#F4F7FA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#172B3A"
+linkColor = "#087E78"
+borderColor = "#DCE5E8"
+font = "'DM Sans':https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "Manrope:https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap, sans-serif"
+baseFontSize = 16
+baseFontWeight = 400
+headingFontSizes = ["32px", "24px", "20px", "18px", "16px", "14px"]
+headingFontWeights = [700, 700, 600, 600, 500, 500]
+metricValueFontSize = "1.75rem"
+metricValueFontWeight = 700
+baseRadius = "10px"
+buttonRadius = "10px"
+showWidgetBorder = true
+showSidebarBorder = true
+paddingTop = "1.25rem"
+paddingBottom = "2rem"
+chartCategoricalColors = ["#087E78", "#5F6F7B", "#A96321", "#172B3A"]
+
+[theme.sidebar]
+backgroundColor = "#E3F3F0"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#172B3A"
+primaryColor = "#087E78"
+linkColor = "#087E78"
+borderColor = "#DCE5E8"
+codeTextColor = "#172B3A"
+codeBackgroundColor = "#FFFFFF"

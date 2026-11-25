@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import unittest
 from io import BytesIO
@@ -70,6 +71,325 @@ class DashboardWorkflowTests(unittest.TestCase):
         if app.exception:
             raise AssertionError([error.message for error in app.exception])
 
+    def test_home_dashboard_reflects_empty_and_populated_input_state(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        self.run_app(app)
+
+        self.assertEqual(app.progress[0].value, 0.0)
+        self.assertTrue(
+            any("Upload a text-based PDF" in item.value for item in app.info)
+        )
+        self.assertTrue(
+            any("Awaiting resume" in item.value for item in app.markdown)
+        )
+
+        app.session_state["resume_text"] = "Python developer with SQL experience"
+        app.session_state["job_description_text"] = "Python and SQL developer"
+        self.run_app(app)
+
+        self.assertEqual(app.progress[0].value, 66)
+        self.assertTrue(any("2 found" in item.value for item in app.markdown))
+        self.assertTrue(
+            any("Python, SQL" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("Ready to analyze" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("Setup progress" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("Open Skill Analysis" in item.value for item in app.info)
+        )
+
+    def test_home_shows_add_resume_when_only_job_description_exists(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        app.session_state["job_description_text"] = "Python and SQL developer"
+        self.run_app(app)
+
+        self.assertEqual(app.progress[0].value, 33)
+        self.assertTrue(any("Add resume" in item.value for item in app.markdown))
+        self.assertTrue(
+            any("Upload a text-based PDF" in item.value for item in app.info)
+        )
+
+    def test_home_shows_add_job_description_when_only_resume_exists(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        app.session_state["resume_text"] = "Python developer"
+        self.run_app(app)
+
+        self.assertEqual(app.progress[0].value, 33)
+        self.assertTrue(
+            any("Add job description" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any("Add a target job description" in item.value for item in app.info)
+        )
+
+    def test_home_shows_complete_progress_after_current_analysis(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        resume_text = "Python developer"
+        job_description = "Python and SQL developer"
+        app.session_state["resume_text"] = resume_text
+        app.session_state["job_description_text"] = job_description
+        app.session_state["job_match_analysis"] = match_job(
+            resume_text,
+            job_description,
+        )
+        app.session_state["job_match_inputs"] = (resume_text, job_description)
+        self.run_app(app)
+
+        self.assertEqual(app.progress[0].value, 100)
+        self.assertTrue(
+            any("Ready - analysis complete" in item.value for item in app.markdown)
+        )
+        self.assertTrue(
+            any(
+                "Review your match in Skill Analysis" in item.value
+                for item in app.success
+            )
+        )
+
+    def test_resume_page_shows_helpful_first_upload_state(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        self.run_app(app)
+
+        app.radio[0].set_value("Resume & Job")
+        self.run_app(app)
+
+        self.assertEqual(app.file_uploader[0].key, "resume_upload")
+        self.assertTrue(
+            any("Upload a text-based PDF" in item.value for item in app.info)
+        )
+        self.assertEqual(app.text_area(key="job_description_input").value, "")
+        self.assertTrue(
+            any(
+                "No target job description added yet." in item.value
+                for item in app.caption
+            )
+        )
+
+    def test_valid_pdf_upload_is_not_reparsed_on_streamlit_reruns(self) -> None:
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
+        self.run_app(app)
+        app.radio[0].set_value("Resume & Job")
+        self.run_app(app)
+        pdf_bytes = ResumeParserTests.create_pdf(text="Python developer")
+
+        with patch(
+            "modules.resume_parser.pymupdf.open",
+            wraps=pymupdf.open,
+        ) as pdf_open:
+            app.file_uploader[0].set_value(
+                ("resume.pdf", pdf_bytes, "application/pdf")
+            )
+            self.run_app(app)
+            self.run_app(app)
+
+        self.assertEqual(app.session_state["resume_text"], "Python developer")
+        self.assertEqual(pdf_open.call_count, 1)
+
+    def test_invalid_replacement_preserves_previous_valid_resume(self) -> None:
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
+        self.run_app(app)
+        app.radio[0].set_value("Resume & Job")
+        self.run_app(app)
+
+        original_resume = "Python developer with SQL experience"
+        app.file_uploader[0].set_value(
+            (
+                "valid.pdf",
+                ResumeParserTests.create_pdf(text=original_resume),
+                "application/pdf",
+            )
+        )
+        self.run_app(app)
+        app.file_uploader[0].set_value(
+            ("replacement.pdf", b"not a PDF", "application/pdf")
+        )
+        self.run_app(app)
+
+        self.assertEqual(app.session_state["resume_text"], original_resume)
+        self.assertTrue(
+            any("missing PDF signature" in item.value for item in app.error)
+        )
+        app.file_uploader[0].set_value(
+            (
+                "corrupt.pdf",
+                b"%PDF-1.7\ncorrupt document",
+                "application/pdf",
+            )
+        )
+        self.run_app(app)
+        self.assertEqual(app.session_state["resume_text"], original_resume)
+        self.assertTrue(
+            any("invalid or corrupted" in item.value.lower() for item in app.error)
+        )
+        self.assertTrue(
+            any(
+                "previous valid resume text is still available" in item.value.lower()
+                for item in app.caption
+            )
+        )
+
+    def test_empty_replacement_preserves_previous_valid_resume(self) -> None:
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"))
+        self.run_app(app)
+        app.radio[0].set_value("Resume & Job")
+        self.run_app(app)
+
+        original_resume = "Python developer"
+        app.file_uploader[0].set_value(
+            (
+                "valid.pdf",
+                ResumeParserTests.create_pdf(text=original_resume),
+                "application/pdf",
+            )
+        )
+        self.run_app(app)
+        app.file_uploader[0].set_value(
+            ("empty.pdf", ResumeParserTests.create_pdf(), "application/pdf")
+        )
+        self.run_app(app)
+
+        self.assertEqual(app.session_state["resume_text"], original_resume)
+        self.assertTrue(
+            any("no extractable text" in item.value.lower() for item in app.warning)
+        )
+        self.assertTrue(
+            any(
+                "previous valid resume text is still available" in item.value.lower()
+                for item in app.caption
+            )
+        )
+
+    def test_skill_analysis_input_states_and_resume_overview(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        self.run_app(app)
+
+        app.radio[0].set_value("Skill Analysis")
+        self.run_app(app)
+        self.assertTrue(
+            any(
+                "Add a resume and a target job description"
+                in item.value
+                for item in app.info
+            )
+        )
+
+        app.session_state["resume_text"] = "Python developer"
+        self.run_app(app)
+        self.assertTrue(
+            any(
+                "Add a target job description to identify matched and missing skills"
+                in item.value
+                for item in app.info
+            )
+        )
+        self.assertTrue(
+            any(metric.label == "Total extracted skills" for metric in app.metric)
+        )
+
+        app.session_state["resume_text"] = ""
+        app.session_state["job_description_text"] = "Python and SQL developer"
+        self.run_app(app)
+        self.assertTrue(
+            any(
+                "Add a resume to see your extracted skills"
+                in item.value
+                for item in app.info
+            )
+        )
+
+        app.session_state["resume_text"] = "Python developer"
+        self.run_app(app)
+        self.assertEqual(app.button[0].label, "Analyze Job Match")
+        self.assertTrue(
+            any(
+                "Resume skill overview" in item.value
+                for item in app.markdown
+            )
+        )
+
+    def test_skill_analysis_displays_matched_missing_and_categories(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        self.run_app(app)
+
+        app.session_state["resume_text"] = "Python SQL Git"
+        app.session_state["job_description_text"] = "Python SQL Docker"
+        app.radio[0].set_value("Skill Analysis")
+        self.run_app(app)
+        app.button[0].click()
+        self.run_app(app)
+
+        metrics = {metric.label: metric.value for metric in app.metric}
+        self.assertEqual(metrics["Total extracted skills"], "3")
+        self.assertNotIn("Programming Languages", metrics)
+        self.assertNotIn("Databases", metrics)
+        self.assertNotIn("Developer Tools", metrics)
+        self.assertTrue(
+            any("2 detected job skills matched" in item.value for item in app.success)
+        )
+        self.assertTrue(
+            any("1 detected job skills" in item.value for item in app.warning)
+        )
+        self.assertTrue(any("Python, SQL" in item.value for item in app.markdown))
+        self.assertTrue(any("Docker" in item.value for item in app.markdown))
+        self.assertIn("66.7% of detected job skills matched", app.progress[0].text)
+        category_labels = [expander.label for expander in app.expander]
+        self.assertIn("Programming Languages (1)", category_labels)
+        self.assertIn("Databases (1)", category_labels)
+        self.assertIn("Developer Tools (1)", category_labels)
+
+    def test_all_five_dashboard_pages_remain_navigable(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        app.session_state["resume_text"] = (
+            "Python SQL REST API Git Django Flask"
+        )
+        self.run_app(app)
+        page_names = (
+            "Home",
+            "Resume & Job",
+            "Skill Analysis",
+            "Career Recommendations",
+            "Learning Roadmap",
+        )
+
+        self.assertEqual(tuple(app.radio[0].options), page_names)
+        for page_name in page_names:
+            app.radio[0].set_value(page_name)
+            self.run_app(app)
+            rendered_markdown = "\n".join(
+                item.value for item in app.markdown if isinstance(item.value, str)
+            )
+            heading_levels = [
+                int(level)
+                for level in re.findall(r"<h([1-6])\b[^>]*>", rendered_markdown)
+            ]
+            self.assertEqual(
+                heading_levels.count(1),
+                1,
+                f"{page_name} should render exactly one page-level h1.",
+            )
+            self.assertTrue(
+                all(
+                    current <= previous + 1
+                    for previous, current in zip(
+                        heading_levels,
+                        heading_levels[1:],
+                    )
+                ),
+                f"{page_name} headings should not skip hierarchy levels.",
+            )
+
     def test_pdf_upload_inputs_and_match_results_survive_navigation(self) -> None:
         app_path = Path(__file__).resolve().parents[1] / "app.py"
         app = AppTest.from_file(str(app_path))
@@ -84,6 +404,9 @@ class DashboardWorkflowTests(unittest.TestCase):
         )
         self.run_app(app)
         self.assertEqual(app.session_state["resume_text"], "Python developer")
+        self.assertTrue(
+            any("first.pdf processed" in item.value for item in app.success)
+        )
         app.text_area(key="job_description_input").set_value(
             "Python and SQL developer"
         )
@@ -134,7 +457,7 @@ class DashboardWorkflowTests(unittest.TestCase):
             any("heuristic skill-alignment" in item.value.lower() for item in app.caption)
         )
         self.assertTrue(
-            any("Software Developer" in item.label for item in app.expander)
+            any("Software Developer" in item.value for item in app.markdown)
         )
 
     def test_career_recommendations_page_warns_when_resume_is_missing(self) -> None:
@@ -146,6 +469,75 @@ class DashboardWorkflowTests(unittest.TestCase):
         self.run_app(app)
         self.assertTrue(
             any("resume is missing" in item.value.lower() for item in app.warning)
+        )
+
+    def test_career_recommendations_rank_different_skill_profiles(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        app.session_state["resume_text"] = (
+            "Python SQL REST API Git Django Flask"
+        )
+        self.run_app(app)
+
+        app.radio[0].set_value("Career Recommendations")
+        self.run_app(app)
+        markdown_values = [item.value for item in app.markdown]
+        self.assertTrue(any("#1 · Python Developer" in value for value in markdown_values))
+        self.assertTrue(any("Core skills" in value for value in markdown_values))
+        self.assertTrue(
+            any("Supporting skills" in value for value in markdown_values)
+        )
+        self.assertTrue(
+            any(item.value.startswith("Matched:") for item in app.success)
+        )
+        self.assertTrue(
+            any(item.value.startswith("Not detected:") for item in app.warning)
+        )
+        self.assertTrue(
+            any(
+                item.text == "70.0% heuristic alignment" for item in app.progress
+            )
+        )
+        self.assertFalse(
+            any(item.label == "Heuristic suitability" for item in app.metric)
+        )
+        self.assertTrue(
+            any(
+                item.label == "Core skill coverage" and item.value == "100.0%"
+                for item in app.metric
+            )
+        )
+
+        app.session_state["resume_text"] = (
+            "Python Machine Learning Deep Learning scikit-learn "
+            "TensorFlow PyTorch"
+        )
+        self.run_app(app)
+        self.assertTrue(
+            any("#1 · AI/ML Engineer" in item.value for item in app.markdown)
+        )
+
+    def test_career_recommendations_show_empty_skill_state_without_fake_scores(
+        self,
+    ) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        app.session_state["resume_text"] = "Research experience with no listed tools."
+        self.run_app(app)
+
+        app.radio[0].set_value("Career Recommendations")
+        self.run_app(app)
+
+        self.assertTrue(
+            any(
+                "no curated taxonomy skills" in item.value.lower()
+                for item in app.warning
+            )
+        )
+        self.assertEqual(len(app.progress), 6)
+        self.assertTrue(all(item.value == 0.0 for item in app.progress))
+        self.assertFalse(
+            any(item.label == "Heuristic suitability" for item in app.metric)
         )
 
 
@@ -187,10 +579,25 @@ class DashboardLearningRoadmapTests(unittest.TestCase):
             ],
         )
         self.assertEqual(len(app.checkbox), 12)
-        self.assertTrue(any(item.value == "Beginner" for item in app.subheader))
-        self.assertTrue(any(item.value == "Intermediate" for item in app.subheader))
-        self.assertTrue(any(item.value == "Advanced" for item in app.subheader))
+        section_headings = [item.value for item in app.markdown]
+        self.assertTrue(any("Beginner" in value for value in section_headings))
+        self.assertTrue(any("Intermediate" in value for value in section_headings))
+        self.assertTrue(any("Advanced" in value for value in section_headings))
         self.assertTrue(any("0 of 12 skills complete" in item.value for item in app.caption))
+        self.assertEqual(app.progress[0].text, "0.0% complete")
+        roadmap_metrics = {
+            item.label: item.value
+            for item in app.metric
+            if item.label in {"Total roadmap skills", "Completed", "Remaining"}
+        }
+        self.assertEqual(
+            roadmap_metrics,
+            {
+                "Total roadmap skills": "12",
+                "Completed": "0",
+                "Remaining": "12",
+            },
+        )
         self.assertTrue(
             any("**Completed skills:** None" in item.value for item in app.markdown)
         )
@@ -235,15 +642,53 @@ class DashboardLearningRoadmapTests(unittest.TestCase):
         self.assertTrue(
             any("1 of 12 skills complete" in item.value for item in app.caption)
         )
-        self.assertTrue(
-            any("8.3%" in item.value for item in app.markdown)
+        roadmap_metrics = {
+            item.label: item.value
+            for item in app.metric
+            if item.label in {"Total roadmap skills", "Completed", "Remaining"}
+        }
+        self.assertEqual(
+            roadmap_metrics,
+            {
+                "Total roadmap skills": "12",
+                "Completed": "1",
+                "Remaining": "11",
+            },
         )
+        self.assertIn("8.3%", app.progress[0].text)
+        self.assertEqual(app.progress[0].text, "8.3% complete")
         self.assertTrue(
             any("**Completed skills:** Python" in item.value for item in app.markdown)
         )
         self.assertTrue(
             any("**Remaining skills:**" in item.value for item in app.markdown)
         )
+
+    def test_completion_badges_distinguish_completed_and_pending_skills(self) -> None:
+        with patch("streamlit.badge") as badge:
+            app = AppTest.from_file(str(self.app_path()))
+            self.run_app(app)
+            self.open_roadmap(app)
+
+            status_labels = [
+                call.args[0]
+                for call in badge.call_args_list
+                if call.args and call.args[0] in {"Completed", "Pending", "In progress"}
+            ]
+            self.assertIn("Pending", status_labels)
+            self.assertNotIn("In progress", status_labels)
+
+            app.checkbox(
+                key="learning_roadmap_done_AI/ML Engineer_Python"
+            ).check().run()
+            status_labels = [
+                call.args[0]
+                for call in badge.call_args_list
+                if call.args and call.args[0] in {"Completed", "Pending", "In progress"}
+            ]
+            self.assertIn("Completed", status_labels)
+            self.assertIn("Pending", status_labels)
+            self.assertNotIn("In progress", status_labels)
 
     def test_career_switching_and_page_navigation_preserve_separate_progress(self) -> None:
         app = AppTest.from_file(str(self.app_path()))
@@ -389,7 +834,8 @@ class DashboardLearningRoadmapTests(unittest.TestCase):
         self.run_app(app)
         self.open_roadmap(app)
 
-        self.assertTrue(any("100.0%" in item.value for item in app.markdown))
+        self.assertEqual(app.progress[0].text, "100.0% complete")
+        self.assertIn("100.0%", app.progress[0].text)
         self.assertTrue(all(checkbox.value for checkbox in app.checkbox))
         self.assertTrue(
             any("**Remaining skills:** None" in item.value for item in app.markdown)
@@ -409,7 +855,21 @@ class DashboardLearningRoadmapTests(unittest.TestCase):
         self.open_roadmap(app)
 
         self.assertEqual(len(app.checkbox), 0)
-        self.assertTrue(any("100.0%" in item.value for item in app.markdown))
+        self.assertEqual(
+            {
+                item.label: item.value
+                for item in app.metric
+                if item.label in {"Total roadmap skills", "Completed", "Remaining"}
+            },
+            {
+                "Total roadmap skills": "0",
+                "Completed": "0",
+                "Remaining": "0",
+            },
+        )
+        self.assertTrue(any("N/A" in item.value for item in app.markdown))
+        self.assertFalse(any("100.0%" in item.value for item in app.markdown))
+        self.assertEqual(len(app.progress), 0)
         self.assertTrue(
             any("already covers all tracked skills" in item.value for item in app.success)
         )
@@ -1392,11 +1852,24 @@ class SecurityRegressionTests(unittest.TestCase):
             )
 
         rendered_html = mock_markdown.call_args.args[0]
+        self.assertIn('<h1 class="page-heading">', rendered_html)
         self.assertNotIn("<script>", rendered_html)
         self.assertNotIn("<img ", rendered_html)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered_html)
         self.assertIn("&quot;with&quot;", rendered_html)
         self.assertIn("Sub &amp; &lt;img src=x onerror=alert(1)&gt;", rendered_html)
+
+    def test_render_section_title_uses_escaped_semantic_heading(self) -> None:
+        import app as career_app
+
+        with patch.object(career_app.st, "markdown") as mock_markdown:
+            career_app.render_section_title("<script>Section</script>", 3)
+
+        rendered_html = mock_markdown.call_args.args[0]
+        self.assertEqual(
+            rendered_html,
+            '<h3 class="section-title">&lt;script&gt;Section&lt;/script&gt;</h3>',
+        )
 
     def test_render_metric_escapes_html_characters(self) -> None:
         """Dynamic values in render_metric must be escaped to prevent HTML injection."""
