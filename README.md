@@ -1,6 +1,6 @@
 # AI Career Navigator
 
-AI Career Navigator is an early Streamlit prototype for a career-guidance platform. It extracts resume text, identifies taxonomy skills, and provides an explainable heuristic comparison with a target job description. Career recommendations are not implemented.
+AI Career Navigator is an early Streamlit prototype for a career-guidance platform. It extracts resume text, identifies taxonomy skills, provides an explainable heuristic comparison with a target job description, and recommends ranked career paths based on detected resume skills.
 
 ## Problem Statement
 
@@ -16,10 +16,10 @@ Job seekers often need to translate varied experience into role-specific skills 
 - Categorized candidate and job skills, plus exact-name matching and missing-skill lists, on the Skill Analysis page.
 - On-demand job matching combining taxonomy skill coverage with TF-IDF cosine similarity, with categorized matches, missing requirements, additional candidate skills, strengths, and improvement suggestions.
 - Resume text and job-description input held only in the active Streamlit session.
-- Clearly marked placeholder for career recommendations.
+- Explainable career recommendations ranked by weighted core (70%) and supporting (30%) skill coverage across six curated roles (`data/careers.json`), with missing-skill gaps and suggested next skills to learn.
 - SQLite connection helper for future persistence; it is not currently used by the app.
 
-Skill extraction is deterministic taxonomy-based keyword matching, not an AI model or semantic NLP system. TF-IDF similarity is lexical and does not infer meaning. The overall match score is a heuristic compatibility estimate, not a probability of being hired. The engine does not evaluate proficiency or account for context and negation. The remaining career recommendation module raises `NotImplementedError` instead of returning sample or fabricated results.
+Skill extraction is deterministic taxonomy-based keyword matching, not an AI model or semantic NLP system. TF-IDF similarity is lexical and does not infer meaning. Both the job match score and the career suitability score are heuristic compatibility estimates, not probabilities of being hired. The engine does not evaluate proficiency or account for context and negation.
 
 ## Technology Stack
 
@@ -110,13 +110,14 @@ AI-Career-Navigator/
 │   ├── resume_parser.py         # In-memory PDF text extraction
 │   ├── skill_extractor.py       # Taxonomy-based skill extraction and comparison
 │   ├── job_matcher.py           # Skill coverage, TF-IDF similarity, and explainable results
-│   └── career_recommender.py    # Future career recommendation interface
+│   └── career_recommender.py    # Explainable career path recommendations
 ├── database/
 │   └── db.py                    # SQLite connection helper; persistence not yet wired into the app
 ├── data/
-│   └── skills.json              # Curated canonical skills and aliases by category
+│   ├── skills.json              # Curated canonical skills and aliases by category
+│   └── careers.json             # Curated career roles with core and supporting skills
 └── tests/
-    └── test_app.py              # Tests PDF parsing, skill extraction, and job matching
+    └── test_app.py              # Tests PDF parsing, skill extraction, job matching, and career recommendations
 ```
 
 ## Security and runtime notes

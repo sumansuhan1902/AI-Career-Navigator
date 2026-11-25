@@ -1,0 +1,124 @@
+{
+  "careers": [
+    {
+      "title": "AI/ML Engineer",
+      "description": "Designs, trains, and deploys machine learning and deep learning models for production applications.",
+      "core_skills": [
+        "Python",
+        "Machine Learning",
+        "Deep Learning",
+        "scikit-learn",
+        "TensorFlow",
+        "PyTorch"
+      ],
+      "supporting_skills": [
+        "NumPy",
+        "Pandas",
+        "Docker",
+        "Git",
+        "SQL",
+        "FastAPI"
+      ]
+    },
+    {
+      "title": "Python Developer",
+      "description": "Builds backend services, APIs, automation tools, and data-driven applications using Python.",
+      "core_skills": [
+        "Python",
+        "SQL",
+        "REST API",
+        "Git",
+        "Django",
+        "Flask"
+      ],
+      "supporting_skills": [
+        "FastAPI",
+        "PostgreSQL",
+        "Docker",
+        "Linux",
+        "CI/CD",
+        "Problem Solving"
+      ]
+    },
+    {
+      "title": "Data Analyst",
+      "description": "Analyzes structured datasets, builds visual reports, and turns metrics into actionable business insights.",
+      "core_skills": [
+        "SQL",
+        "Data Analysis",
+        "Data Visualization",
+        "Statistical Analysis",
+        "Pandas",
+        "Python"
+      ],
+      "supporting_skills": [
+        "NumPy",
+        "ETL",
+        "A/B Testing",
+        "PostgreSQL",
+        "MySQL",
+        "Communication"
+      ]
+    },
+    {
+      "title": "Data Scientist",
+      "description": "Applies statistics, feature engineering, and predictive modeling to solve complex analytical problems.",
+      "core_skills": [
+        "Python",
+        "Data Science",
+        "Machine Learning",
+        "Statistical Analysis",
+        "Pandas",
+        "scikit-learn"
+      ],
+      "supporting_skills": [
+        "NumPy",
+        "SciPy",
+        "Feature Engineering",
+        "Data Visualization",
+        "SQL",
+        "Deep Learning"
+      ]
+    },
+    {
+      "title": "NLP Engineer",
+      "description": "Develops text-processing pipelines, language models, and conversational AI systems.",
+      "core_skills": [
+        "Python",
+        "Natural Language Processing",
+        "Large Language Models",
+        "Deep Learning",
+        "PyTorch",
+        "Machine Learning"
+      ],
+      "supporting_skills": [
+        "TensorFlow",
+        "scikit-learn",
+        "Generative AI",
+        "Neural Networks",
+        "FastAPI",
+        "Docker"
+      ]
+    },
+    {
+      "title": "Software Developer",
+      "description": "Designs, builds, tests, and maintains reliable software systems and web services.",
+      "core_skills": [
+        "Git",
+        "SQL",
+        "REST API",
+        "Problem Solving",
+        "Backend Development",
+        "Docker"
+      ],
+      "supporting_skills": [
+        "Python",
+        "Java",
+        "JavaScript",
+        "CI/CD",
+        "Linux",
+        "Teamwork"
+      ]
+    }
+  ]
+}

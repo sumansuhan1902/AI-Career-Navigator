@@ -14,12 +14,18 @@ from modules.resume_parser import (
     ScannedPDFError,
     extract_text_from_pdf,
 )
+from modules.career_recommender import (
+    CareerCatalogError,
+    CareerRecommendation,
+    InvalidCareerRecommendationInputError,
+    recommend_careers_from_text,
+)
 from modules.job_matcher import (
     InvalidJobMatchingInputError,
     JobMatchAnalysis,
     match_job,
 )
-from modules.skill_extractor import SkillExtractionError
+from modules.skill_extractor import SkillExtractionError, extract_skills
 
 
 st.set_page_config(
@@ -214,10 +220,10 @@ def render_home() -> None:
 
     st.markdown('<div class="section-title">Start here</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="status-panel"><strong>Skill comparison uses curated keyword matching</strong>'
+        '<div class="status-panel"><strong>Skill comparison and career guidance use curated taxonomy matching</strong>'
         '<span>Add a resume and target job description in Resume &amp; Job to '
-        'inspect detected and missing skills. '
-        'Career recommendations are not implemented.</span></div>',
+        'inspect detected and missing skills, or open Career Recommendations '
+        'to explore ranked career paths from your resume.</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -488,6 +494,89 @@ def render_pending_page(title: str, subtitle: str, details: str) -> None:
     )
 
 
+def render_career_recommendation_card(
+    rank: int,
+    recommendation: CareerRecommendation,
+) -> None:
+    """Render an explainable career recommendation card."""
+    title = f"#{rank} — {recommendation.title}"
+    with st.expander(f"{title} ({recommendation.suitability_score:.1f}% alignment)", expanded=(rank <= 3)):
+        st.write(recommendation.description)
+        st.progress(recommendation.suitability_score / 100)
+        metric_cols = st.columns(3)
+        with metric_cols[0]:
+            render_metric("Heuristic suitability", f"{recommendation.suitability_score:.1f}%")
+        with metric_cols[1]:
+            render_metric("Core skill coverage", f"{recommendation.core_coverage_score:.1f}%")
+        with metric_cols[2]:
+            render_metric(
+                "Supporting skill coverage",
+                f"{recommendation.supporting_coverage_score:.1f}%",
+            )
+        st.markdown(f"**Why recommended:** {recommendation.explanation}")
+
+        matched_all = (
+            recommendation.matching_core_skills
+            + recommendation.matching_supporting_skills
+        )
+        col_matched, col_missing, col_next = st.columns(3)
+        with col_matched:
+            st.markdown("**Matching skills**")
+            st.write(", ".join(matched_all) if matched_all else "None detected")
+        with col_missing:
+            st.markdown("**Missing core skills**")
+            st.write(
+                ", ".join(recommendation.missing_core_skills)
+                if recommendation.missing_core_skills
+                else "None"
+            )
+        with col_next:
+            st.markdown("**Suggested skills to learn next**")
+            st.write(
+                ", ".join(recommendation.next_skills_to_learn[:5])
+                if recommendation.next_skills_to_learn
+                else "All tracked skills present"
+            )
+
+
+def render_career_recommendations() -> None:
+    render_heading(
+        "Explainable role guidance",
+        "Career recommendations",
+        "Ranked career paths based on taxonomy skills detected in your uploaded resume.",
+    )
+    resume_text = st.session_state.get("resume_text", "")
+    if not isinstance(resume_text, str) or not resume_text.strip():
+        st.warning("Resume is missing. Upload a text-based PDF in Resume & Job to generate career recommendations.")
+        return
+
+    try:
+        detected_skills = extract_skills(resume_text)
+        recommendations = recommend_careers_from_text(resume_text)
+    except (
+        CareerCatalogError,
+        InvalidCareerRecommendationInputError,
+        SkillExtractionError,
+    ) as error:
+        st.error(f"Career recommendations are unavailable: {error}")
+        return
+
+    if detected_skills:
+        st.caption(f"Detected resume skills ({len(detected_skills)}): {', '.join(detected_skills)}")
+    else:
+        st.warning(
+            "No curated taxonomy skills were detected in the resume. "
+            "All roles show 0.0% alignment; review extracted text or expand skills."
+        )
+
+    st.caption(
+        "Suitability scores are heuristic skill-alignment estimates (70% core skills, "
+        "30% supporting skills), not a probability of getting hired."
+    )
+    for index, recommendation in enumerate(recommendations, start=1):
+        render_career_recommendation_card(index, recommendation)
+
+
 def main() -> None:
     apply_styles()
     with st.sidebar:
@@ -512,11 +601,7 @@ def main() -> None:
     elif selected_page == "Skill Analysis":
         render_skill_analysis()
     else:
-        render_pending_page(
-            "Career recommendations",
-            "Explore role directions grounded in your experience and interests.",
-            "Career recommendations are not implemented. No roles are being generated or ranked.",
-        )
+        render_career_recommendations()
 
 
 if __name__ == "__main__":

@@ -11,7 +11,17 @@ import pymupdf
 from streamlit.testing.v1 import AppTest
 
 from database.db import get_connection
-from modules.career_recommender import recommend_careers
+from modules.career_recommender import (
+    CORE_SKILL_WEIGHT,
+    SUPPORTING_SKILL_WEIGHT,
+    CareerCatalogError,
+    CareerRecommendation,
+    InvalidCareerRecommendationInputError,
+    load_career_catalog,
+    recommend_careers,
+    recommend_careers_from_skills,
+    recommend_careers_from_text,
+)
 from modules.job_matcher import (
     InvalidJobMatchingInputError,
     SKILL_COVERAGE_WEIGHT,
@@ -113,19 +123,206 @@ class DashboardWorkflowTests(unittest.TestCase):
         app.radio[0].set_value("Career Recommendations")
         self.run_app(app)
         self.assertTrue(
-            any("not implemented" in item.value.lower() for item in app.markdown)
+            any("heuristic skill-alignment" in item.value.lower() for item in app.caption)
+        )
+        self.assertTrue(
+            any("Software Developer" in item.label for item in app.expander)
+        )
+
+    def test_career_recommendations_page_warns_when_resume_is_missing(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        self.run_app(app)
+
+        app.radio[0].set_value("Career Recommendations")
+        self.run_app(app)
+        self.assertTrue(
+            any("resume is missing" in item.value.lower() for item in app.warning)
         )
 
 
-class PendingFeatureTests(unittest.TestCase):
-    def test_analysis_modules_fail_explicitly_until_implemented(self) -> None:
-        pending_calls = (
-            lambda: recommend_careers(["Python"]),
+class CareerRecommenderTests(unittest.TestCase):
+    def test_catalog_loads_all_six_careers_and_validates_against_taxonomy(self) -> None:
+        profiles = load_career_catalog()
+        titles = {profile.title for profile in profiles}
+        self.assertEqual(
+            titles,
+            {
+                "AI/ML Engineer",
+                "Python Developer",
+                "Data Analyst",
+                "Data Scientist",
+                "NLP Engineer",
+                "Software Developer",
+            },
         )
-        for call in pending_calls:
-            with self.subTest(call=call):
-                with self.assertRaises(NotImplementedError):
-                    call()
+
+    def test_each_career_ranks_first_for_its_core_skill_profile(self) -> None:
+        profiles = load_career_catalog()
+        for profile in profiles:
+            with self.subTest(career=profile.title):
+                results = recommend_careers_from_skills(list(profile.core_skills))
+                self.assertEqual(results[0].title, profile.title)
+                self.assertEqual(results[0].core_coverage_score, 100.0)
+                self.assertEqual(results[0].missing_core_skills, [])
+
+    def test_exact_weighted_suitability_score_calculation(self) -> None:
+        # AI/ML Engineer has 6 core skills and 6 supporting skills.
+        # Match 3 core (50%) and 2 supporting (33.333...%).
+        results = recommend_careers_from_skills(
+            ["Python", "Machine Learning", "Deep Learning", "NumPy", "Pandas"]
+        )
+        aiml = next(item for item in results if item.title == "AI/ML Engineer")
+        expected_score = round(
+            ((3 / 6) * CORE_SKILL_WEIGHT + (2 / 6) * SUPPORTING_SKILL_WEIGHT) * 100,
+            1,
+        )
+        self.assertEqual(aiml.core_coverage_score, 50.0)
+        self.assertEqual(aiml.supporting_coverage_score, 33.3)
+        self.assertEqual(aiml.suitability_score, expected_score)
+        self.assertEqual(
+            aiml.next_skills_to_learn,
+            aiml.missing_core_skills + aiml.missing_supporting_skills,
+        )
+        self.assertIn("Matches 3 of 6 core skills", aiml.explanation)
+
+    def test_ranking_and_deterministic_tie_breaking(self) -> None:
+        import tempfile
+
+        catalog_data = {
+            "careers": [
+                {
+                    "title": "Zeta Role",
+                    "description": "Zeta description",
+                    "core_skills": ["Python", "SQL"],
+                    "supporting_skills": [],
+                },
+                {
+                    "title": "Alpha Role",
+                    "description": "Alpha description",
+                    "core_skills": ["Python", "SQL"],
+                    "supporting_skills": [],
+                },
+            ]
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            catalog_path = Path(tmpdir) / "careers.json"
+            catalog_path.write_text(
+                __import__("json").dumps(catalog_data),
+                encoding="utf-8",
+            )
+            results = recommend_careers_from_skills(
+                ["Python"], catalog_path=catalog_path
+            )
+            self.assertEqual([r.title for r in results], ["Alpha Role", "Zeta Role"])
+
+    def test_aliases_duplicates_and_unknown_skills_are_handled_safely(self) -> None:
+        canonical_results = recommend_careers_from_skills(
+            ["Python", "scikit-learn", "Machine Learning"]
+        )
+        noisy_results = recommend_careers_from_skills(
+            [
+                "python",
+                "PYTHON 3",
+                "sklearn",
+                "ML",
+                "   ",
+                "NonExistentFrameworkXYZ",
+            ]
+        )
+        self.assertEqual(canonical_results, noisy_results)
+
+    def test_empty_skills_returns_zero_scores_with_guidance(self) -> None:
+        results = recommend_careers_from_skills([])
+        self.assertEqual(len(results), 6)
+        self.assertTrue(all(r.suitability_score == 0.0 for r in results))
+        self.assertTrue(all(r.next_skills_to_learn for r in results))
+
+    def test_top_n_and_invalid_inputs_raise_explicit_errors(self) -> None:
+        top_two = recommend_careers_from_skills(["Python"], top_n=2)
+        self.assertEqual(len(top_two), 2)
+
+        for bad_top_n in (0, -3, True, "2", 1.5):
+            with self.subTest(bad_top_n=bad_top_n):
+                with self.assertRaises(InvalidCareerRecommendationInputError):
+                    recommend_careers_from_skills(["Python"], top_n=bad_top_n)  # type: ignore[arg-type]
+
+        for bad_skills in ("Python", b"Python", None, 42, ["Python", 123]):
+            with self.subTest(bad_skills=bad_skills):
+                with self.assertRaises(InvalidCareerRecommendationInputError):
+                    recommend_careers_from_skills(bad_skills)  # type: ignore[arg-type]
+
+        with self.assertRaises(InvalidCareerRecommendationInputError):
+            recommend_careers_from_text(None)  # type: ignore[arg-type]
+
+    def test_missing_and_malformed_catalog_raise_career_catalog_error(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing_path = Path(tmpdir) / "does_not_exist.json"
+            with self.assertRaises(CareerCatalogError):
+                load_career_catalog(missing_path)
+
+            bad_json = Path(tmpdir) / "bad.json"
+            bad_json.write_text("{not valid json", encoding="utf-8")
+            with self.assertRaises(CareerCatalogError):
+                load_career_catalog(bad_json)
+
+            unknown_skill_catalog = Path(tmpdir) / "unknown.json"
+            unknown_skill_catalog.write_text(
+                json.dumps(
+                    {
+                        "careers": [
+                            {
+                                "title": "Test Role",
+                                "description": "Desc",
+                                "core_skills": ["MadeUpSkill123"],
+                                "supporting_skills": [],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(CareerCatalogError):
+                load_career_catalog(unknown_skill_catalog)
+
+            overlap_catalog = Path(tmpdir) / "overlap.json"
+            overlap_catalog.write_text(
+                json.dumps(
+                    {
+                        "careers": [
+                            {
+                                "title": "Test Role",
+                                "description": "Desc",
+                                "core_skills": ["Python"],
+                                "supporting_skills": ["Python"],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(CareerCatalogError):
+                load_career_catalog(overlap_catalog)
+
+    def test_backward_compatible_recommend_careers_returns_dicts(self) -> None:
+        results = recommend_careers(["Python", "Natural Language Processing", "PyTorch"])
+        self.assertIsInstance(results, list)
+        self.assertEqual(len(results), 6)
+        self.assertIsInstance(results[0], dict)
+        self.assertEqual(results[0]["title"], "NLP Engineer")
+        self.assertIn("suitability_score", results[0])
+        self.assertIn("next_skills_to_learn", results[0])
+
+    def test_recommend_careers_from_text_extracts_and_ranks(self) -> None:
+        results = recommend_careers_from_text(
+            "Experienced in NLP, LLMs, PyTorch, Deep Learning, and Python."
+        )
+        self.assertIsInstance(results[0], CareerRecommendation)
+        self.assertEqual(results[0].title, "NLP Engineer")
+        self.assertGreater(results[0].suitability_score, results[-1].suitability_score)
 
 
 class ResumeParserTests(unittest.TestCase):
@@ -453,9 +650,11 @@ class SecurityRegressionTests(unittest.TestCase):
       - PDF size and page limits as hard security controls.
       - PDF header signature validation as a file-type gate.
       - In-memory processing (no disk writes).
-      - Dependency audit: venv pip-audit reports zero known vulnerabilities.
       - PyMuPDF is imported via the non-deprecated 'pymupdf' namespace.
       - The deprecated 'fitz' alias is not used anywhere in production modules.
+
+    Dependency vulnerability auditing (`python -m pip_audit --desc`) is run as a
+    separate security audit command so ordinary unit tests remain offline-safe.
     """
 
     # ------------------------------------------------------------------
@@ -633,47 +832,6 @@ class SecurityRegressionTests(unittest.TestCase):
             f"Unexpected fitz DeprecationWarnings on 'import pymupdf': "
             f"{deprecation_warnings}",
         )
-
-    # ------------------------------------------------------------------
-    # Dependency audit — no known vulnerabilities in the venv.
-    # ------------------------------------------------------------------
-
-    def test_pip_audit_reports_no_known_vulnerabilities(self) -> None:
-        """pip-audit must report zero known vulnerabilities for all packages
-        installed in the active virtual environment.
-
-        This test is intentionally slow (network call to PyPI advisories) and
-        is marked with a note; it passes in CI when the network is available.
-        If pip-audit is not installed, the test is skipped rather than failed,
-        because the absence of the tool is a configuration issue, not a
-        vulnerability.
-        """
-        import subprocess
-        import sys
-
-        result = subprocess.run(
-            [sys.executable, "-m", "pip_audit", "--desc"],
-            capture_output=True,
-            text=True,
-        )
-        output = (result.stdout + result.stderr).strip()
-        # pip-audit exits 0 when no vulnerabilities are found and 1 when
-        # vulnerabilities are present.  Exit code 1 with no output lines
-        # matching "vulnerability" means the tool is not installed.
-        if result.returncode != 0 and "No known vulnerabilities" not in output:
-            if "No module named pip_audit" in output or "No module named pip-audit" in output:
-                self.skipTest("pip-audit is not installed in this environment.")
-            # Non-zero exit with vulnerability output means real findings.
-            self.fail(
-                f"pip-audit reported vulnerabilities or failed:\n{output}"
-            )
-        self.assertIn(
-            "No known vulnerabilities",
-            output,
-            f"Expected 'No known vulnerabilities' in pip-audit output.\n"
-            f"Full output:\n{output}",
-        )
-
 
     # ------------------------------------------------------------------
     # HTML escaping & server upload config.
