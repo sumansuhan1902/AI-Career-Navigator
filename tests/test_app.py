@@ -71,6 +71,15 @@ class DashboardWorkflowTests(unittest.TestCase):
         if app.exception:
             raise AssertionError([error.message for error in app.exception])
 
+    def test_sidebar_displays_career_development_label(self) -> None:
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path))
+        self.run_app(app)
+
+        sidebar_markup = "\n".join(element.value for element in app.markdown)
+        self.assertIn("CAREER DEVELOPMENT TOOL", sidebar_markup)
+        self.assertNotIn("EARLY PROTOTYPE", sidebar_markup)
+
     def test_home_dashboard_reflects_empty_and_populated_input_state(self) -> None:
         app_path = Path(__file__).resolve().parents[1] / "app.py"
         app = AppTest.from_file(str(app_path))

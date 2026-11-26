@@ -1110,7 +1110,7 @@ def main() -> None:
             label_visibility="collapsed",
         )
         st.divider()
-        st.markdown('<span class="prototype-tag">EARLY PROTOTYPE</span>', unsafe_allow_html=True)
+        st.markdown('<span class="prototype-tag">CAREER DEVELOPMENT TOOL</span>', unsafe_allow_html=True)
 
     if selected_page == "Home":
         render_home()
