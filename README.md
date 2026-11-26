@@ -22,6 +22,38 @@ Job seekers often need to translate varied experience into role-specific skills 
 
 Skill extraction is deterministic taxonomy-based keyword matching, not an AI model or semantic NLP system. TF-IDF similarity is lexical and does not infer meaning. Both the job match score and the career suitability score are heuristic compatibility estimates, not probabilities of being hired. The engine does not evaluate proficiency or account for context and negation.
 
+## Application Screenshots
+
+### Home
+
+![Home dashboard](screenshots/home.png)
+
+*Home dashboard.*
+
+### Resume & Job
+
+![Resume and job workspace](screenshots/resume-job.png)
+
+*Resume and job workspace.*
+
+### Skill Analysis
+
+![Skill analysis](screenshots/skill-analysis.png)
+
+*Skill analysis.*
+
+### Career Recommendations
+
+![Career recommendations](screenshots/career-recommendations.png)
+
+*Career recommendations.*
+
+### Learning Roadmap
+
+![Learning roadmap](screenshots/learning-roadmap.png)
+
+*Learning roadmap.*
+
 ## Feature 05: Personalized Learning Roadmap
 
 The **Learning Roadmap** dashboard page turns each curated career profile into an ordered plan for learning its skills.
