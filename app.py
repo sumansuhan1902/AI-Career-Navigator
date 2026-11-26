@@ -44,8 +44,8 @@ from modules.skill_extractor import (
 
 
 st.set_page_config(
-    page_title="AI Career Navigator",
-    page_icon=":material/explore:",
+    page_title="AI Career Navigator | Resume Analysis & Career Guidance",
+    page_icon=":material/work_outline:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -149,7 +149,9 @@ def render_home() -> None:
         render_heading(
             "Career workspace",
             "Welcome to AI Career Navigator",
-            "Turn your experience into a clear next step.",
+            "Analyze a text-based PDF resume to extract technical and professional "
+            "skills, compare them with job descriptions, explore suitable career "
+            "paths, and generate a personalized learning roadmap.",
         )
         if not has_resume:
             st.info(

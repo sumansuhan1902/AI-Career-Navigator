@@ -76,6 +76,13 @@ class DashboardWorkflowTests(unittest.TestCase):
         app = AppTest.from_file(str(app_path))
         self.run_app(app)
 
+        self.assertTrue(
+            any(
+                "Analyze a text-based PDF resume to extract technical and "
+                "professional skills" in item.value
+                for item in app.markdown
+            )
+        )
         self.assertEqual(app.progress[0].value, 0.0)
         self.assertTrue(
             any("Upload a text-based PDF" in item.value for item in app.info)
